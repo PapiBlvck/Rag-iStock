@@ -89,18 +89,18 @@ export function AppLayout({
               key={item.id}
               onClick={() => handleRouteChange(item.id)}
               className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 relative group',
+                'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-300 relative group hover:scale-[1.02] active:scale-[0.98]',
                 isActive
-                  ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-md shadow-primary/20'
-                  : 'text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground'
+                  ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30'
+                  : 'text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground hover:translate-x-1'
               )}
             >
-              <Icon className={cn('h-5 w-5 transition-transform', isActive && 'scale-110')} />
-              <span className={cn('font-medium', isActive && 'font-semibold')}>
+              <Icon className={cn('h-5 w-5 transition-all duration-300', isActive ? 'scale-110' : 'group-hover:scale-110 group-hover:rotate-3')} />
+              <span className={cn('font-medium transition-all duration-300', isActive && 'font-semibold')}>
                 {item.label}
               </span>
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-white rounded-r-full" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-white rounded-r-full transition-all duration-300 group-hover:h-8" />
               )}
             </button>
           );
@@ -166,11 +166,23 @@ export function AppLayout({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto md:ml-0">
+      <main className="flex-1 overflow-auto md:ml-0 bg-gradient-to-br from-background via-background to-primary/5 dark:from-background dark:via-background/99 dark:to-primary/15 chat-scrollbar">
         <div className="h-full md:pt-0 pt-16">
           {children}
         </div>
       </main>
+
+      {/* Floating Chat Button - Only show when not already on chat page */}
+      {user && currentRoute !== 'chatbot' && (
+        <Button
+          onClick={() => handleRouteChange('chatbot')}
+          className="fixed bottom-4 right-4 md:bottom-6 md:right-6 h-14 w-14 rounded-full bg-gradient-to-br from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 hover:scale-110 active:scale-95 z-40 flex items-center justify-center p-0"
+          size="icon"
+          aria-label="Open Chat"
+        >
+          <MessageSquare className="h-6 w-6" />
+        </Button>
+      )}
     </div>
   );
 }

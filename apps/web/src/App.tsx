@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { SignIn } from '@/components/auth/SignIn';
 import { SignUp } from '@/components/auth/SignUp';
@@ -12,10 +12,41 @@ import { Settings } from '@/pages/Settings';
 
 type AuthView = 'sign-in' | 'sign-up';
 
+const STORAGE_KEY = 'istock_current_route';
+const VALID_ROUTES: AppRoute[] = ['dashboard', 'chatbot', 'feed-optimizer', 'health-records', 'ingredients', 'settings'];
+
 function App() {
   const { isAuthenticated } = useAuth();
   const [authView, setAuthView] = useState<AuthView>('sign-in');
-  const [currentRoute, setCurrentRoute] = useState<AppRoute>('dashboard');
+  
+  // Load route from localStorage on mount, default to 'dashboard'
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const route = stored as AppRoute;
+        if (VALID_ROUTES.includes(route)) {
+          return route;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load stored route:', error);
+    }
+    return 'dashboard';
+  });
+
+  // Save route to localStorage whenever it changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      try {
+        localStorage.setItem(STORAGE_KEY, currentRoute);
+      } catch (error) {
+        console.error('Failed to save route:', error);
+      }
+    }
+  }, [currentRoute, isAuthenticated]);
 
   // Not authenticated - show auth screen
   if (!isAuthenticated) {

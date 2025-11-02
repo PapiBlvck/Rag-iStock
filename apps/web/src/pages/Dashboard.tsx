@@ -56,21 +56,58 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-900/50 dark:to-gray-950">
-      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-sm sticky top-0 z-10">
+    <div className="h-full overflow-y-auto chat-scrollbar">
+      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-            Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2 font-medium">
-            Overview of your livestock management
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                Dashboard
+              </h1>
+              <p className="text-sm text-muted-foreground mt-2 font-medium">
+                Overview of your livestock management
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8">
+        {/* Hero Welcome Section */}
+        {(stats.totalChats === 0 && stats.totalOptimizations === 0) && (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent dark:from-primary/20 dark:via-primary/10 border border-primary/20 dark:border-primary/30 p-8 md:p-12">
+            <div className="relative z-10 text-center space-y-4">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary/20 dark:bg-primary/30 mb-4">
+                <TrendingUp className="h-8 w-8 text-primary" />
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+                Welcome to iStock!
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto text-base leading-relaxed">
+                Get started by asking a health question or optimizing your feed costs. 
+                Your activity and insights will appear here.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center mt-6">
+                <button
+                  onClick={() => onNavigate('chatbot')}
+                  className="px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95"
+                >
+                  Ask Health Question
+                </button>
+                <button
+                  onClick={() => onNavigate('feed-optimizer')}
+                  className="px-6 py-3 rounded-xl bg-background border-2 border-primary/20 hover:border-primary/40 text-foreground font-medium shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
+                >
+                  Optimize Feed Costs
+                </button>
+              </div>
+            </div>
+            <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <StatsCard
             title="Total Chats"
             value={stats.totalChats}
@@ -105,37 +142,27 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           />
         </div>
 
-        {/* Quick Actions and Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <QuickActions onActionClick={onNavigate} />
-          <ActivityFeed
-            activities={activities}
-            onActivityClick={(activity) => {
-              if (activity.type === 'chat') {
-                onNavigate('chatbot');
-              } else {
-                onNavigate('feed-optimizer');
-              }
-            }}
-          />
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Quick Actions - Takes 2 columns */}
+          <div className="lg:col-span-2">
+            <QuickActions onActionClick={onNavigate} />
+          </div>
+          
+          {/* Activity Feed - Takes 1 column */}
+          <div className="lg:col-span-1">
+            <ActivityFeed
+              activities={activities}
+              onActivityClick={(activity) => {
+                if (activity.type === 'chat') {
+                  onNavigate('chatbot');
+                } else {
+                  onNavigate('feed-optimizer');
+                }
+              }}
+            />
+          </div>
         </div>
-
-        {/* Welcome Message */}
-        {stats.totalChats === 0 && stats.totalOptimizations === 0 && (
-          <Card className="border-0 shadow-md bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
-            <CardContent className="pt-6 pb-6">
-              <div className="text-center space-y-3">
-                <h3 className="text-xl font-bold text-foreground">
-                  Welcome to iStock!
-                </h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Get started by asking a health question or optimizing your feed costs. 
-                  Your activity will appear here.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );

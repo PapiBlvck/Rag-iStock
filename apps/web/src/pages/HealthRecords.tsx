@@ -107,8 +107,8 @@ export function HealthRecords() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-900/50 dark:to-gray-950">
-      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-sm sticky top-0 z-10">
+    <div className="h-full overflow-y-auto chat-scrollbar">
+      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
             Chat History
@@ -153,7 +153,7 @@ export function HealthRecords() {
         ) : (
           <div className="space-y-4">
             {filteredRecords.map((record) => (
-              <Card key={record.id} className="border-0 shadow-md hover:shadow-lg transition-shadow">
+              <Card key={record.id} className="border-0 shadow-md hover:shadow-xl hover:scale-[1.01] transition-all duration-300 cursor-pointer group">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
