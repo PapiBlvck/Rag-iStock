@@ -20,8 +20,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
 
 interface SignUpProps {
   onSwitchToSignIn: () => void;
@@ -32,15 +34,24 @@ export function SignUp({ onSwitchToSignIn, onSuccess }: SignUpProps) {
   const { signup } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<SignUpInput>({
     resolver: zodResolver(SignUpSchema),
     defaultValues: {
       email: '',
+      fullName: '',
       password: '',
       confirmPassword: '',
     },
   });
+
+  const password = form.watch('password');
+  const confirmPassword = form.watch('confirmPassword');
+  
+  // Check if passwords match
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
 
   const onSubmit = async (data: SignUpInput) => {
     setIsLoading(true);
@@ -48,7 +59,7 @@ export function SignUp({ onSwitchToSignIn, onSuccess }: SignUpProps) {
 
     try {
       // Always use 'Farmer' role for all accounts (handled automatically in AuthContext)
-      await signup(data.email, data.password);
+      await signup(data.email, data.password, data.fullName);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign up');
@@ -83,6 +94,24 @@ export function SignUp({ onSwitchToSignIn, onSuccess }: SignUpProps) {
 
             <FormField
               control={form.control}
+              name="fullName"
+              render={({ field }: { field: ControllerRenderProps<SignUpInput, 'fullName'> }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      placeholder="John Doe"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="email"
               render={({ field }: { field: ControllerRenderProps<SignUpInput, 'email'> }) => (
                 <FormItem>
@@ -106,8 +135,32 @@ export function SignUp({ onSwitchToSignIn, onSuccess }: SignUpProps) {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Create a strong password"
+                        {...field}
+                        className="pr-10"
+                        aria-describedby="password-requirements"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
+                  <FormDescription id="password-requirements">
+                    Password must be at least 6 characters long
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -120,8 +173,47 @@ export function SignUp({ onSwitchToSignIn, onSuccess }: SignUpProps) {
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Re-enter your password"
+                        {...field}
+                        className="pr-10"
+                        aria-describedby="confirm-password-hint"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
+                  <FormDescription id="confirm-password-hint">
+                    Re-enter your password to confirm
+                  </FormDescription>
+                  {confirmPassword && password && (
+                    <div className="flex items-center gap-2 text-xs">
+                      {passwordsMatch ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-500" aria-hidden="true" />
+                          <span className="text-green-600 dark:text-green-500">Passwords match</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-3 w-3 text-destructive" aria-hidden="true" />
+                          <span className="text-destructive">Passwords don't match</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

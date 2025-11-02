@@ -88,13 +88,16 @@ export function Chatbot() {
         setChatHistory(parsedHistory.sort((a: ChatHistoryItem, b: ChatHistoryItem) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         ));
-      } catch (error) {
-        console.error('Failed to load chat history:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load chat history',
-          variant: 'destructive',
-        });
+      } catch (error: any) {
+        // Don't log errors for permission issues - they're expected until rules are set up
+        if (error?.code !== 'permission-denied') {
+          console.error('Failed to load chat history:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load chat history',
+            variant: 'destructive',
+          });
+        }
       } finally {
         setIsLoadingHistory(false);
       }
@@ -170,13 +173,16 @@ export function Chatbot() {
           setChatHistory(parsedHistory.sort((a: ChatHistoryItem, b: ChatHistoryItem) => 
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           ));
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to save chat:', error);
-          toast({
-            title: 'Error',
-            description: 'Failed to save chat history',
-            variant: 'destructive',
-          });
+          // Don't show toast for permission errors (rules not set up)
+          if (error?.code !== 'permission-denied') {
+            toast({
+              title: 'Error',
+              description: 'Failed to save chat history',
+              variant: 'destructive',
+            });
+          }
         }
       }
     } catch (error) {
@@ -228,13 +234,16 @@ export function Chatbot() {
         title: 'Success',
         description: 'Chat title updated',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update chat title:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update chat title',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to update chat title',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -263,13 +272,16 @@ export function Chatbot() {
         title: 'Success',
         description: 'Chat deleted',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete chat:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete chat',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to delete chat',
+          variant: 'destructive',
+        });
+      }
     }
   };
 

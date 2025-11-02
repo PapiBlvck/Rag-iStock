@@ -64,8 +64,11 @@ export function FeedOptimizer() {
           nutritionalValues: ing.nutritionalValues,
         }));
         setSavedIngredients(converted);
-      } catch (error) {
-        console.error('Failed to load ingredients:', error);
+      } catch (error: any) {
+        // Don't log errors for permission issues - they're expected until rules are set up
+        if (error?.code !== 'permission-denied') {
+          console.error('Failed to load ingredients:', error);
+        }
       }
     };
 
@@ -136,9 +139,10 @@ export function FeedOptimizer() {
             rations: response.rations,
             timestamp: new Date(),
           });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to save feed optimization:', error);
           // Don't block the user, just log the error
+          // Permission errors are expected if Firestore rules aren't set up yet
         }
       }
       
@@ -152,7 +156,7 @@ export function FeedOptimizer() {
   return (
     <div className="h-full overflow-y-auto chat-scrollbar">
       <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
             Feed Optimizer
           </h1>
@@ -163,7 +167,7 @@ export function FeedOptimizer() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
         <Card className="border-0 shadow-xl">
           <CardHeader className="pb-6">
             <CardTitle className="text-2xl font-bold">Feed Optimization Calculator</CardTitle>

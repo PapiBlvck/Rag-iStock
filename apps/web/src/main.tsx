@@ -5,11 +5,47 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Toaster } from '@/components/ui/toaster';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { validateEnv } from '@/lib/env';
 // Initialize Firebase (import side effects)
 import '@/lib/firebase';
 import App from './App.tsx';
 import './index.css';
+
+// Suppress React DevTools warning (intercept both console.warn and console.error)
+// This is a backup - the main suppression is in index.html
+if (typeof window !== 'undefined') {
+  const originalWarn = console.warn.bind(console);
+  const originalError = console.error.bind(console);
+  
+  console.warn = (...args: any[]) => {
+    const message = String(args[0] || '');
+    // Suppress React DevTools warning messages
+    if (
+      message.includes('Download the React DevTools') ||
+      message.includes('reactjs.org/link/react-devtools') ||
+      message.includes('react-devtools') ||
+      message.includes('React DevTools')
+    ) {
+      return; // Suppress React DevTools message
+    }
+    originalWarn(...args);
+  };
+  
+  console.error = (...args: any[]) => {
+    const message = String(args[0] || '');
+    // Suppress React DevTools warning messages (sometimes they come as errors)
+    if (
+      message.includes('Download the React DevTools') ||
+      message.includes('reactjs.org/link/react-devtools') ||
+      message.includes('react-devtools') ||
+      message.includes('React DevTools')
+    ) {
+      return; // Suppress React DevTools message
+    }
+    originalError(...args);
+  };
+}
 
 // Validate environment variables on app start
 if (import.meta.env.DEV) {
@@ -34,16 +70,18 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <NotificationProvider>
-          <AuthProvider>
-            <App />
-            <Toaster />
-          </AuthProvider>
-        </NotificationProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <NotificationProvider>
+            <AuthProvider>
+              <App />
+              <Toaster />
+            </AuthProvider>
+          </NotificationProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
 

@@ -53,8 +53,22 @@ export async function getDocument<T extends DocumentData>(
       return { id: docSnap.id, ...docSnap.data() } as T;
     }
     return null;
-  } catch (error) {
-    console.error(`Error getting document ${collectionPath}/${documentId}:`, error);
+  } catch (error: any) {
+    // Provide helpful error message for permission errors
+    if (error?.code === 'permission-denied') {
+      // Only log once per session to avoid spam
+      const errorKey = `permission-denied-${collectionPath}`;
+      if (!sessionStorage.getItem(errorKey)) {
+        console.warn(
+          `⚠️ Firestore permission denied: ${collectionPath}. ` +
+          `Please set up security rules in Firebase Console. ` +
+          `See SETUP_FIRESTORE_RULES.md for quick instructions.`
+        );
+        sessionStorage.setItem(errorKey, 'true');
+      }
+    } else {
+      console.error(`Error getting document ${collectionPath}/${documentId}:`, error);
+    }
     throw error;
   }
 }
@@ -74,8 +88,22 @@ export async function getCollection<T extends DocumentData>(
       id: doc.id,
       ...doc.data(),
     })) as T[];
-  } catch (error) {
-    console.error(`Error getting collection ${collectionPath}:`, error);
+  } catch (error: any) {
+    // Provide helpful error message for permission errors
+    if (error?.code === 'permission-denied') {
+      // Only log once per session to avoid spam
+      const errorKey = `permission-denied-${collectionPath}`;
+      if (!sessionStorage.getItem(errorKey)) {
+        console.warn(
+          `⚠️ Firestore permission denied: ${collectionPath}. ` +
+          `Please set up security rules in Firebase Console. ` +
+          `See SETUP_FIRESTORE_RULES.md for quick instructions.`
+        );
+        sessionStorage.setItem(errorKey, 'true');
+      }
+    } else {
+      console.error(`Error getting collection ${collectionPath}:`, error);
+    }
     throw error;
   }
 }
@@ -94,8 +122,17 @@ export async function setDocument(
       ...data,
       updatedAt: dateToTimestamp(new Date()),
     }, { merge: true });
-  } catch (error) {
-    console.error(`Error setting document ${collectionPath}/${documentId}:`, error);
+  } catch (error: any) {
+    // Provide helpful error message for permission errors
+    if (error?.code === 'permission-denied') {
+      console.error(
+        `Permission denied writing to ${collectionPath}/${documentId}. ` +
+        `Please set up Firestore security rules. ` +
+        `See FIREBASE_SETUP_INSTRUCTIONS.md for details.`
+      );
+    } else {
+      console.error(`Error setting document ${collectionPath}/${documentId}:`, error);
+    }
     throw error;
   }
 }
@@ -114,8 +151,17 @@ export async function updateDocument(
       ...data,
       updatedAt: dateToTimestamp(new Date()),
     });
-  } catch (error) {
-    console.error(`Error updating document ${collectionPath}/${documentId}:`, error);
+  } catch (error: any) {
+    // Provide helpful error message for permission errors
+    if (error?.code === 'permission-denied') {
+      console.error(
+        `Permission denied updating ${collectionPath}/${documentId}. ` +
+        `Please set up Firestore security rules. ` +
+        `See FIREBASE_SETUP_INSTRUCTIONS.md for details.`
+      );
+    } else {
+      console.error(`Error updating document ${collectionPath}/${documentId}:`, error);
+    }
     throw error;
   }
 }
@@ -130,8 +176,17 @@ export async function deleteDocument(
   try {
     const docRef = doc(db, collectionPath, documentId);
     await deleteDoc(docRef);
-  } catch (error) {
-    console.error(`Error deleting document ${collectionPath}/${documentId}:`, error);
+  } catch (error: any) {
+    // Provide helpful error message for permission errors
+    if (error?.code === 'permission-denied') {
+      console.error(
+        `Permission denied deleting ${collectionPath}/${documentId}. ` +
+        `Please set up Firestore security rules. ` +
+        `See FIREBASE_SETUP_INSTRUCTIONS.md for details.`
+      );
+    } else {
+      console.error(`Error deleting document ${collectionPath}/${documentId}:`, error);
+    }
     throw error;
   }
 }

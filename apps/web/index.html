@@ -5,6 +5,39 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>iStock - Precision Livestock</title>
+    <script>
+      // Suppress React DevTools warning BEFORE React loads
+      (function() {
+        const originalWarn = console.warn.bind(console);
+        const originalError = console.error.bind(console);
+        
+        console.warn = function(...args) {
+          const message = String(args[0] || '');
+          if (
+            message.includes('Download the React DevTools') ||
+            message.includes('reactjs.org/link/react-devtools') ||
+            message.includes('react-devtools') ||
+            message.includes('React DevTools')
+          ) {
+            return; // Suppress React DevTools message
+          }
+          originalWarn.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+          const message = String(args[0] || '');
+          if (
+            message.includes('Download the React DevTools') ||
+            message.includes('reactjs.org/link/react-devtools') ||
+            message.includes('react-devtools') ||
+            message.includes('React DevTools')
+          ) {
+            return; // Suppress React DevTools message
+          }
+          originalError.apply(console, args);
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

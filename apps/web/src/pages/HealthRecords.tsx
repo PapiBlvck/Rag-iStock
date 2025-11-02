@@ -52,13 +52,16 @@ export function HealthRecords() {
         setRecords(parsedRecords.sort((a: HealthRecord, b: HealthRecord) => 
           b.timestamp.getTime() - a.timestamp.getTime()
         ));
-      } catch (error) {
-        console.error('Failed to load health records:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load health records',
-          variant: 'destructive',
-        });
+      } catch (error: any) {
+        // Don't log errors for permission issues - they're expected until rules are set up
+        if (error?.code !== 'permission-denied') {
+          console.error('Failed to load health records:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load health records',
+            variant: 'destructive',
+          });
+        }
       } finally {
         setIsLoading(false);
       }
@@ -109,13 +112,16 @@ export function HealthRecords() {
         title: 'Success',
         description: 'Record title updated',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update record:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update record',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to update record',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -136,13 +142,16 @@ export function HealthRecords() {
         title: 'Success',
         description: 'Record deleted',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete record:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete record',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to delete record',
+          variant: 'destructive',
+        });
+      }
     }
   };
 

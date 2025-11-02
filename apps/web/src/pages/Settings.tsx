@@ -55,13 +55,16 @@ export function Settings() {
         title: 'Success',
         description: 'Data exported successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to export data:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to export data',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to export data',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -79,13 +82,16 @@ export function Settings() {
         description: 'Chat history cleared successfully',
       });
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to clear chat history:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to clear chat history',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to clear chat history',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -103,13 +109,16 @@ export function Settings() {
         description: 'Feed history cleared successfully',
       });
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to clear feed history:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to clear feed history',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to clear feed history',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -127,20 +136,23 @@ export function Settings() {
         description: 'Ingredients cleared successfully',
       });
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to clear ingredients:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to clear ingredients',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to clear ingredients',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
   return (
     <div className="h-full overflow-y-auto chat-scrollbar">
       <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
             Settings
           </h1>
@@ -150,7 +162,7 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
         {/* Profile Settings */}
         <Card className="border-0 shadow-md">
           <CardHeader>
@@ -165,6 +177,14 @@ export function Settings() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {user?.displayName && (
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <div className="px-3 py-2 rounded-md border bg-muted text-sm font-medium">
+                  {user.displayName}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Email</Label>
               <div className="px-3 py-2 rounded-md border bg-muted text-sm font-medium">

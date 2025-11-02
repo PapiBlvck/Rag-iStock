@@ -38,8 +38,16 @@ interface Env {
 
 function getEnvVar(key: string, defaultValue?: string): string {
   const value = import.meta.env[key];
+  // Only warn if the variable is required (no defaultValue) and not set
   if (!value && !defaultValue) {
-    console.warn(`Environment variable ${key} is not set`);
+    // Skip warnings for optional variables
+    const optionalVars = [
+      'VITE_FIREBASE_MEASUREMENT_ID',
+      'VITE_SENTRY_DSN',
+    ];
+    if (!optionalVars.includes(key)) {
+      console.warn(`Environment variable ${key} is not set`);
+    }
   }
   return value || defaultValue || '';
 }
@@ -68,7 +76,7 @@ export const env: Env = {
     storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
     appId: getEnvVar('VITE_FIREBASE_APP_ID'),
-    measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID'),
+    measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID'), // Optional - only needed for Analytics
   },
   
   useEmulator: getEnvVarAsBoolean('VITE_USE_FIREBASE_EMULATOR', false),
@@ -83,7 +91,7 @@ export const env: Env = {
   environment: (getEnvVar('VITE_ENVIRONMENT', 'development') || 'development') as Env['environment'],
   
   enableAnalytics: getEnvVarAsBoolean('VITE_ENABLE_ANALYTICS', false),
-  sentryDsn: getEnvVar('VITE_SENTRY_DSN'),
+  sentryDsn: getEnvVar('VITE_SENTRY_DSN'), // Optional - only needed for Sentry error tracking
 };
 
 /**

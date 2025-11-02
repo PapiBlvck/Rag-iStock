@@ -67,8 +67,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 5);
 
         setActivities(allActivities);
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error);
+      } catch (error: any) {
+        // Don't log errors for permission issues - they're expected until rules are set up
+        if (error?.code !== 'permission-denied') {
+          console.error('Failed to load dashboard data:', error);
+          // Could show a toast here if needed, but for dashboard we'll just log
+          console.warn('Non-permission error loading dashboard:', error);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -82,14 +87,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                Dashboard
-              </h1>
-              <p className="text-sm text-muted-foreground mt-2 font-medium">
-                Overview of your livestock management
-              </p>
-            </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                  {(() => {
+                    const firstName = user?.displayName?.split(' ')[0];
+                    return firstName ? `Welcome back, ${firstName}!` : 'Dashboard';
+                  })()}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-2 font-medium">
+                  {user?.displayName 
+                    ? 'Here\'s an overview of your livestock management'
+                    : 'Overview of your livestock management'
+                  }
+                </p>
+              </div>
           </div>
         </div>
       </div>
@@ -103,11 +114,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <TrendingUp className="h-8 w-8 text-primary" />
               </div>
               <h2 className="text-3xl md:text-4xl font-bold text-foreground">
-                Welcome to iStock!
+                {(() => {
+                  const firstName = user?.displayName?.split(' ')[0] || 'Welcome';
+                  return firstName === 'Welcome' ? 'Welcome to iStock!' : `Welcome back, ${firstName}!`;
+                })()}
               </h2>
               <p className="text-muted-foreground max-w-2xl mx-auto text-base leading-relaxed">
-                Get started by asking a health question or optimizing your feed costs. 
-                Your activity and insights will appear here.
+                {user?.displayName 
+                  ? `We're glad you're here! Get started by asking a health question or optimizing your feed costs.`
+                  : `Get started by asking a health question or optimizing your feed costs. Your activity and insights will appear here.`
+                }
               </p>
               <div className="flex flex-wrap gap-3 justify-center mt-6" role="group" aria-label="Quick actions">
                 <button

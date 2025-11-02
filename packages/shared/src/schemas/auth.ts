@@ -9,6 +9,7 @@ export const SignInSchema = z.object({
 });
 
 export const SignUpSchema = SignInSchema.extend({
+  fullName: z.string().min(2, 'Full name must be at least 2 characters').max(100, 'Full name must be less than 100 characters'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",

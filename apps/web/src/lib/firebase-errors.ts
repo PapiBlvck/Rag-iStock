@@ -56,7 +56,7 @@ export function getFirebaseErrorMessage(error: unknown): string {
       
       // Firestore errors
       case 'permission-denied':
-        return 'You do not have permission to perform this action.';
+        return 'Please set up Firestore security rules in Firebase Console. See SETUP_FIRESTORE_RULES.md for instructions.';
       
       case 'unavailable':
         return 'Service is temporarily unavailable. Please try again later.';

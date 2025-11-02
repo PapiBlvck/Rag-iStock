@@ -72,13 +72,16 @@ export function IngredientLibrary() {
           nutritionalValues: ing.nutritionalValues,
         }));
         setIngredients(converted);
-      } catch (error) {
-        console.error('Failed to load ingredients:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load ingredients',
-          variant: 'destructive',
-        });
+      } catch (error: any) {
+        // Don't log errors for permission issues - they're expected until rules are set up
+        if (error?.code !== 'permission-denied') {
+          console.error('Failed to load ingredients:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load ingredients',
+            variant: 'destructive',
+          });
+        }
       }
     };
 
@@ -146,13 +149,16 @@ export function IngredientLibrary() {
         });
       }
       form.reset();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save ingredient:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save ingredient',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to save ingredient',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -170,13 +176,16 @@ export function IngredientLibrary() {
         title: 'Success',
         description: 'Ingredient deleted successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete ingredient:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete ingredient',
-        variant: 'destructive',
-      });
+      // Only show toast for non-permission errors
+      if (error?.code !== 'permission-denied') {
+        toast({
+          title: 'Error',
+          description: 'Failed to delete ingredient',
+          variant: 'destructive',
+        });
+      }
     }
   };
 

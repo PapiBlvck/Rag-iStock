@@ -22,7 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -55,9 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: 'Farmer',
             });
           }
-        } catch (error) {
-          console.error('Error loading user profile:', error);
-          // Fallback to basic user info
+        } catch (error: any) {
+          // If it's a permission error, Firestore rules aren't set up yet
+          // Don't log errors for permission issues - they're expected until rules are set up
+          if (error?.code !== 'permission-denied') {
+            console.error('Error loading user profile:', error);
+          }
+          // Fallback to basic user info - this is fine, we'll create the profile on first action
           setUser({
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -83,14 +87,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (email: string, password: string) => {
+  const signup = async (email: string, password: string, fullName?: string) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Trim and validate fullName before saving
+      const trimmedName = fullName?.trim();
+      const displayName = trimmedName && trimmedName.length > 0 ? trimmedName : undefined;
       
       // Create user profile in Firestore - always Farmer role
       await createUserProfile(userCredential.user.uid, {
         email,
         role: 'Farmer',
+        displayName,
       });
       
       // Auth state listener will update user automatically
