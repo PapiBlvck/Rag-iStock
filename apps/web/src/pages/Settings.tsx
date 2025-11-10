@@ -1,8 +1,10 @@
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -13,6 +15,10 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Sun, Moon, Monitor, Trash2, Download, User, Database } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { storage } from '@/lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   getChatHistory,
   getFeedOptimizations,
@@ -24,6 +30,15 @@ export function Settings() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Update displayName when user changes
+  useEffect(() => {
+    setDisplayName(user?.displayName || '');
+  }, [user?.displayName]);
 
   const exportAllData = async () => {
     if (!user?.id) return;
@@ -149,6 +164,66 @@ export function Settings() {
     }
   };
 
+  const handleProfileUpdate = async () => {
+    if (!user || !auth.currentUser) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in to update your profile',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+
+    try {
+      let photoURL = user.photoURL || null;
+
+      // Upload profile picture if a new file was selected
+      if (profilePictureFile) {
+        const storageRef = ref(storage, `profilePictures/${user.uid}`);
+        await uploadBytes(storageRef, profilePictureFile);
+        photoURL = await getDownloadURL(storageRef);
+      }
+
+      // Update profile
+      const updateData: { displayName?: string; photoURL?: string } = {};
+      if (displayName.trim() !== user.displayName) {
+        updateData.displayName = displayName.trim() || null;
+      }
+      if (photoURL && photoURL !== user.photoURL) {
+        updateData.photoURL = photoURL;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await updateProfile(auth.currentUser, updateData);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Profile updated successfully',
+      });
+
+      // Reset file input
+      setProfilePictureFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      // Reload to show updated profile
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Failed to update profile:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update profile',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto chat-scrollbar">
       <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
@@ -177,20 +252,75 @@ export function Settings() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {user?.displayName && (
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <div className="px-3 py-2 rounded-md border bg-muted text-sm font-medium">
-                  {user.displayName}
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Enter your full name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Profile Picture</Label>
+              <div className="flex items-center gap-4">
+                {user?.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || 'Profile'}
+                    className="h-16 w-16 rounded-full object-cover border-2 border-primary/20"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
+                    {user?.displayName ? (
+                      <span className="text-lg font-semibold text-primary">
+                        {user.displayName
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </span>
+                    ) : (
+                      <User className="h-8 w-8 text-primary" />
+                    )}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setProfilePictureFile(file);
+                      }
+                    }}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {profilePictureFile
+                      ? `Selected: ${profilePictureFile.name}`
+                      : 'Upload a new profile picture'}
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
             <div className="space-y-2">
               <Label>Email</Label>
               <div className="px-3 py-2 rounded-md border bg-muted text-sm font-medium">
                 {user?.email}
               </div>
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
+            <Button
+              onClick={handleProfileUpdate}
+              disabled={isUpdatingProfile}
+              className="w-full"
+            >
+              {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
+            </Button>
           </CardContent>
         </Card>
 
@@ -272,7 +402,7 @@ export function Settings() {
 
               <Separator />
 
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+              <div className="flex items-center justify-between">
                 <div>
                   <Label className="font-semibold text-destructive">Clear Chat History</Label>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -285,7 +415,7 @@ export function Settings() {
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+              <div className="flex items-center justify-between">
                 <div>
                   <Label className="font-semibold text-destructive">Clear Feed History</Label>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -298,7 +428,7 @@ export function Settings() {
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+              <div className="flex items-center justify-between">
                 <div>
                   <Label className="font-semibold text-destructive">Clear Ingredients</Label>
                   <p className="text-xs text-muted-foreground mt-1">

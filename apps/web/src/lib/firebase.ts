@@ -5,6 +5,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator, type FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig, firebaseEmulatorConfig } from './firebase-config';
 import { env } from './env';
 
@@ -45,6 +46,21 @@ if (env.useEmulator && firebaseEmulatorConfig) {
   } catch (error) {
     // Emulator already connected
     console.warn('Firestore emulator connection issue:', error);
+  }
+}
+
+// Initialize Storage
+export const storage: FirebaseStorage = getStorage(app);
+
+// Connect to emulator if configured
+if (env.useEmulator && firebaseEmulatorConfig?.storage) {
+  try {
+    const [host, port] = firebaseEmulatorConfig.storage.host.split(':');
+    connectStorageEmulator(storage, host, parseInt(port, 10));
+    console.log('Connected to Firebase Storage Emulator');
+  } catch (error) {
+    // Emulator already connected
+    console.warn('Storage emulator connection issue:', error);
   }
 }
 

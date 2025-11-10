@@ -6,25 +6,21 @@ import { AppLayout, type AppRoute } from '@/components/layout/AppLayout';
 import { Loader2 } from 'lucide-react';
 
 // Lazy load page components for code splitting
-const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })));
 const Chatbot = lazy(() => import('@/pages/Chatbot').then(module => ({ default: module.Chatbot })));
-const FeedOptimizer = lazy(() => import('@/pages/FeedOptimizer').then(module => ({ default: module.FeedOptimizer })));
-const HealthRecords = lazy(() => import('@/pages/HealthRecords').then(module => ({ default: module.HealthRecords })));
-const IngredientLibrary = lazy(() => import('@/pages/IngredientLibrary').then(module => ({ default: module.IngredientLibrary })));
 const Settings = lazy(() => import('@/pages/Settings').then(module => ({ default: module.Settings })));
 
 type AuthView = 'sign-in' | 'sign-up';
 
 const STORAGE_KEY = 'istock_current_route';
-const VALID_ROUTES: AppRoute[] = ['dashboard', 'chatbot', 'feed-optimizer', 'health-records', 'ingredients', 'settings'];
+const VALID_ROUTES: AppRoute[] = ['chatbot', 'settings'];
 
 function App() {
   const { isAuthenticated } = useAuth();
   const [authView, setAuthView] = useState<AuthView>('sign-in');
   
-  // Load route from localStorage on mount, default to 'dashboard'
+  // Load route from localStorage on mount, default to 'chatbot'
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
-    if (typeof window === 'undefined') return 'dashboard';
+    if (typeof window === 'undefined') return 'chatbot';
     
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -37,7 +33,7 @@ function App() {
     } catch (error) {
       console.error('Failed to load stored route:', error);
     }
-    return 'dashboard';
+    return 'chatbot';
   });
 
   // Save route to localStorage whenever it changes
@@ -87,34 +83,10 @@ function App() {
   // Authenticated - show main app with routing
   const renderRoute = () => {
     switch (currentRoute) {
-      case 'dashboard':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <Dashboard onNavigate={setCurrentRoute} />
-          </Suspense>
-        );
       case 'chatbot':
         return (
           <Suspense fallback={<LoadingFallback />}>
             <Chatbot />
-          </Suspense>
-        );
-      case 'feed-optimizer':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <FeedOptimizer />
-          </Suspense>
-        );
-      case 'health-records':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <HealthRecords />
-          </Suspense>
-        );
-      case 'ingredients':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <IngredientLibrary />
           </Suspense>
         );
       case 'settings':
@@ -126,7 +98,7 @@ function App() {
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <Dashboard onNavigate={setCurrentRoute} />
+            <Chatbot />
           </Suspense>
         );
     }

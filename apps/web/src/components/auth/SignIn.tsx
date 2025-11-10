@@ -61,7 +61,7 @@ export function SignIn({ onSwitchToSignUp, onSuccess }: SignInProps) {
         <div className="flex items-start justify-between">
           <div className="space-y-1 flex-1">
           <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-            Welcome Back
+            Welcome
           </CardTitle>
           <CardDescription className="text-base">
             Sign in to your iStock account
