@@ -70,9 +70,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div className="flex-1 min-w-0">
           <div className="bg-muted/50 dark:bg-muted/30 border border-border/50 rounded-2xl px-4 py-3 shadow-sm">
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="text-foreground whitespace-pre-wrap leading-relaxed mb-4 m-0">
-                {message.text}
-              </p>
+              <div 
+                className="text-foreground leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: message.text }}
+              />
 
               {message.response && (
                 <div className="mt-4 space-y-4">

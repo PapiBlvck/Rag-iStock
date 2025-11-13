@@ -1,9 +1,11 @@
+// Updated: 2025-11-11 - Fixed Gemini model region and model name
 import dotenv from 'dotenv';
 import { onRequest, Request } from 'firebase-functions/v2/https';
 import { Response } from 'express';
 import { initializeApp, getApps } from 'firebase-admin/app';
 // import { getAuth } from 'firebase-admin/auth'; // Uncomment when you enable authentication
 import { GoogleAuth } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
 import * as path from 'path';
 import * as functions from 'firebase-functions';
 import { handleCorsPreflight, setCorsHeaders } from './cors';
@@ -85,6 +87,201 @@ async function getAuthenticatedClient() {
 }
 
 /**
+ * Synthesize a concise answer from retrieved contexts using Vertex AI Generative AI SDK
+ */
+async function synthesizeAnswer(
+  userQuery: string,
+  contexts: string[],
+  projectId: string,
+  location: string
+): Promise<string> {
+  console.log('=== SYNTHESIS FUNCTION CALLED (rag.ts) ===', {
+    userQuery: userQuery.substring(0, 50),
+    contextsCount: contexts.length,
+    projectId,
+    location,
+  });
+  
+  try {
+    // Combine contexts (use top 10 for better coverage)
+    const combinedContext = contexts
+      .slice(0, 10)
+      .join('\n\n---\n\n');
+
+    // Create prompt for synthesis - improved to match Google Cloud Console format
+    const systemInstruction = `You are a helpful assistant that provides accurate information about livestock health based on veterinary documents. 
+
+When answering questions about diseases or conditions:
+- Organize your answer by categories (e.g., Bacterial Diseases, Viral Diseases, Other Conditions)
+- List each disease with a brief, clear description
+- Use simple, professional language appropriate for farmers
+- Do NOT include disclaimers, legal text, document metadata, or formatting instructions
+- Focus on providing a comprehensive, well-structured list of the requested information
+- For questions asking "what are common X" or "list X", provide a clear, organized list format`;
+
+    // Detect if this is a list-type question
+    const isListQuestion = /^(what are|list|name|tell me about|common|types of|kinds of)/i.test(userQuery);
+    
+    const userPrompt = isListQuestion 
+      ? `Based on the following context from veterinary documents, provide a comprehensive, well-organized list answering: ${userQuery}
+
+Context:
+${combinedContext}
+
+Format your answer as a clear list with categories where appropriate. Include all relevant items from the context.`
+      : `Based on the following context from veterinary documents, answer this question: ${userQuery}
+
+Context:
+${combinedContext}
+
+Provide a clear, well-organized answer with specific examples from the context.`;
+
+    // Use Google Gen AI SDK (recommended - replaces deprecated Vertex AI SDK)
+    // Try multiple regions and models
+    const regionsToTry = ['us-central1', 'us-east1', 'europe-west4'];
+    const modelsToTry = [
+      'gemini-1.5-pro',
+      'gemini-1.5-flash',
+      'gemini-1.0-pro',
+    ];
+
+    let lastError: any = null;
+
+    for (const region of regionsToTry) {
+      try {
+        console.log(`Trying region: ${region}`, {
+          projectId: projectId,
+        });
+
+        // Initialize Google Gen AI with Vertex AI backend
+        const genAI = new GoogleGenAI({
+          vertexai: true, // Use Vertex AI backend
+          project: projectId,
+          location: region,
+        });
+
+        for (const modelName of modelsToTry) {
+          try {
+            console.log(`Trying Gemini model: ${modelName} in ${region}`);
+
+            // Generate content with timeout - Google Gen AI SDK format
+            // Include system instruction in the prompt since SDK may not support it separately
+            const fullPrompt = `${systemInstruction}\n\n${userPrompt}`;
+            
+            const result = await Promise.race([
+              genAI.models.generateContent({
+                model: modelName,
+                contents: fullPrompt,
+                config: {
+                  maxOutputTokens: 2000,
+                  temperature: 0.7,
+                  topP: 0.95,
+                },
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+              ),
+            ]) as any;
+
+            // Extract text - Google Gen AI SDK format
+            let text = '';
+            // Google Gen AI SDK returns result.text directly or result.response.text
+            if (result.text) {
+              text = result.text;
+            } else if (result.response?.text) {
+              text = result.response.text;
+            } else if (typeof result.response === 'string') {
+              text = result.response;
+            } else {
+              // Try nested formats
+              if (result.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                text = result.response.candidates[0].content.parts[0].text;
+              } else if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                text = result.candidates[0].content.parts[0].text;
+              }
+            }
+            
+            if (text && text.trim().length > 0) {
+              const generatedText = text.trim();
+              console.log(`Synthesis successful with ${modelName} in ${region}:`, {
+                textLength: generatedText.length,
+                preview: generatedText.substring(0, 100),
+              });
+              return generatedText;
+            }
+            
+            console.warn(`Model ${modelName} in ${region} returned no text, trying next model`);
+            continue;
+          } catch (error: any) {
+            const errorMsg = error.message || String(error);
+            console.warn(`Model ${modelName} in ${region} failed:`, errorMsg);
+            lastError = { region, model: modelName, error: errorMsg };
+            continue; // Try next model
+          }
+        }
+      } catch (error: any) {
+        const errorMsg = error.message || String(error);
+        console.warn(`Region ${region} initialization failed:`, errorMsg);
+        lastError = { region, error: errorMsg };
+        continue; // Try next region
+      }
+    }
+
+    // If all models and regions failed, throw error with details
+    throw new Error(`All Gemini models failed. Last error: ${JSON.stringify(lastError)}`);
+  } catch (error: any) {
+    console.error('LLM synthesis error:', {
+      message: error.message,
+      stack: error.stack,
+      error: error,
+    });
+    // Enhanced fallback: extract and organize information from all contexts
+    return formatContextsAsAnswer(userQuery, contexts);
+  }
+}
+
+/**
+ * Format contexts into a structured answer when LLM synthesis is not available
+ * This extracts relevant information and organizes it similar to Google Cloud Console
+ */
+function formatContextsAsAnswer(query: string, contexts: string[]): string {
+  if (contexts.length === 0) {
+    return 'Unable to generate answer. Please try rephrasing your question.';
+  }
+
+  // Combine and clean contexts
+  const combined = contexts.slice(0, 5).join('\n\n---\n\n');
+  
+  // Remove metadata sections that aren't useful
+  let cleaned = combined
+    .replace(/Appearance:.*?behaviour\./gs, '')
+    .replace(/Natural functions:.*?milk\./gs, '')
+    .replace(/Discharges:.*?discharge\./gs, '')
+    .replace(/Swellings:.*?appearances\./gs, '')
+    .replace(/DISEASE DIAGNOSIS/g, '')
+    .replace(/CATEGORIES OF DISEASES/g, '')
+    .replace(/CONTROL OF DISEASES/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Extract meaningful sentences
+  const sentences = cleaned.split(/[.!?]\s+/).filter(s => s.length > 30 && s.length < 500);
+  
+  // Take first 15-20 sentences for a comprehensive answer
+  const answer = sentences.slice(0, 20).join('. ').trim();
+  
+  if (answer.length < 100) {
+    // If still too short, use first context with better formatting
+    const firstContext = contexts[0];
+    const firstSentences = firstContext.split(/[.!?]\s+/).filter(s => s.length > 30);
+    return firstSentences.slice(0, 10).join('. ').trim() + (firstSentences.length > 10 ? '...' : '');
+  }
+
+  return answer + (sentences.length > 20 ? '...' : '');
+}
+
+/**
  * Cloud Function to query RAG Engine via Vertex AI
  * 
  * This function:
@@ -94,7 +291,7 @@ async function getAuthenticatedClient() {
  * 
  * Environment variables required (in functions/.env or Firebase config):
  * - RAG_ENGINE_PROJECT_ID: Your Google Cloud project ID
- * - RAG_ENGINE_LOCATION: Location of RAG Engine (e.g., us-east1)
+ * - RAG_ENGINE_LOCATION: Location of RAG Engine (e.g., europe-west3)
  * - RAG_ENGINE_ID: Your RAG Engine ID
  * 
  * POST /ragQuery
@@ -103,7 +300,7 @@ async function getAuthenticatedClient() {
 
 export const ragQuery = onRequest(
   {
-    region: process.env.RAG_ENGINE_LOCATION || 'us-east1', // Make sure this region is correct
+    region: process.env.RAG_ENGINE_LOCATION || 'europe-west3', // Updated to europe-west3 for new RAG engine
     maxInstances: 10,
     timeoutSeconds: 60,
     memory: '512MiB',
@@ -202,8 +399,8 @@ export const ragQuery = onRequest(
         },
         body: JSON.stringify({
           query: prompt,
-          numContexts: 5, // Number of context chunks to retrieve
-          similarityTopK: 5, // Top K similar contexts
+          numContexts: 15, // Increased to 15 for better context coverage
+          similarityTopK: 15, // Increased to 15 for better retrieval
           ...(context && { context: context }), // Optional context
         }),
       });
@@ -234,20 +431,92 @@ export const ragQuery = onRequest(
         confidence?: number;
       };
 
-      // Step 6: Format response
+      // Step 6: Format response with LLM synthesis
       const contexts = data.contexts || data.contextChunks || [];
       const scores = data.scores || [];
 
+      console.log('RAG Engine response:', {
+        contextsCount: contexts.length,
+        scoresCount: scores.length,
+        hasResponse: !!data.response,
+      });
+
+      // Extract text from all contexts
+      const contextTexts = contexts
+        .map((ctx: any) => {
+          return ctx.text || ctx.content || ctx.contextText || 
+                 ctx.ragContext?.text || ctx.ragContext?.content || '';
+        })
+        .filter((text: string) => text && String(text).trim().length > 0)
+        .map((text: string) => String(text).trim());
+
+      console.log('Extracted context texts:', {
+        count: contextTexts.length,
+        totalLength: contextTexts.reduce((sum, text) => sum + text.length, 0),
+      });
+
+      // Synthesize answer using LLM
+      let responseText = 'No response generated';
+      if (contextTexts.length > 0) {
+        console.log('Synthesizing answer from', contextTexts.length, 'contexts');
+        try {
+          responseText = await synthesizeAnswer(prompt, contextTexts, projectId, location);
+          console.log('Synthesized answer length:', responseText.length);
+        } catch (synthesisError: any) {
+          console.error('Synthesis failed:', synthesisError);
+          // Don't throw, let it fall through to fallback
+        }
+      }
+      
+      // Fallback if synthesis didn't work - use enhanced formatting
+      if (responseText === 'No response generated' || responseText.length < 50) {
+        console.log('Using enhanced fallback formatting');
+        responseText = formatContextsAsAnswer(prompt, contextTexts);
+      }
+
+      // Deduplicate sources by title
+      const sourceMap = new Map<string, { uri: string; title: string }>();
+      
+      contexts.forEach((ctx: any) => {
+        const uri = ctx.sourceUri 
+          || ctx.uri 
+          || ctx.source?.uri
+          || ctx.metadata?.sourceUri
+          || ctx.metadata?.source
+          || ctx.ragContext?.sourceUri
+          || ctx.ragContext?.uri;
+        
+        const title = ctx.sourceDisplayName
+          || ctx.sourceTitle 
+          || ctx.title 
+          || ctx.source?.title
+          || ctx.metadata?.title
+          || ctx.ragContext?.title
+          || ctx.ragContext?.sourceTitle
+          || 'Reference';
+        
+        // Use title as the deduplication key (or URI if title is generic)
+        const key = title !== 'Reference' ? title.toLowerCase().trim() : (uri || 'unknown');
+        
+        // Only add if we haven't seen this source before and it has valid data
+        if (!sourceMap.has(key) && title && title !== 'Reference') {
+          const validUri = uri && (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:'))
+            ? uri
+            : `https://rag.istock.local/${encodeURIComponent(title)}`;
+          
+          sourceMap.set(key, {
+            uri: validUri,
+            title: title,
+          });
+        }
+      });
+
       const ragResponse: RagResponse = {
-        text: (contexts[0]?.text as string) || (contexts[0]?.content as string) || data.response || 'No response generated',
-        sources: contexts.map((ctx: unknown, idx: number) => {
-          const context = ctx as Record<string, unknown>;
-          return {
-            uri: (context.sourceUri || context.uri || (context.metadata as Record<string, unknown>)?.source || `context-${idx}`) as string,
-            title: (context.sourceTitle || context.title || (context.metadata as Record<string, unknown>)?.title || 'Reference') as string,
-          };
-        }),
-        confidence: scores[0] || data.confidence || 0.8,
+        text: responseText,
+        sources: Array.from(sourceMap.values()), // Convert Map to array of unique sources
+        confidence: scores.length > 0 
+          ? Math.max(...scores)  // Use the maximum score (highest confidence)
+          : (data.confidence || 0.8),
       };
 
       // Log successful request (optional)

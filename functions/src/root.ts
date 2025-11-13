@@ -10,7 +10,7 @@ import { setCorsHeaders, ALLOWED_ORIGINS } from './cors';
  */
 export const root = onRequest(
   {
-    region: process.env.RAG_ENGINE_LOCATION || 'us-east1',
+    region: process.env.RAG_ENGINE_LOCATION || 'europe-west3', // Updated to europe-west3 for new RAG engine
     maxInstances: 10,
     timeoutSeconds: 60,
     memory: '256MiB',

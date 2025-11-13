@@ -1,8 +1,10 @@
+// Updated: 2025-11-11 - Fixed Gemini model region and model name
 import dotenv from 'dotenv';
 import { onRequest, Request } from 'firebase-functions/v2/https';
 import { Response } from 'express';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { VertexRagServiceClient } from '@google-cloud/aiplatform';
+import { GoogleAuth } from 'google-auth-library';
 import * as path from 'path';
 import * as functions from 'firebase-functions';
 import { handleCorsPreflight, setCorsHeaders } from './cors';
@@ -74,18 +76,6 @@ function getVertexRagClient(projectId: string, location: string) {
   });
 }
 
-/**
- * Get access token for Vertex AI API calls
- */
-async function getAccessToken(): Promise<string> {
-  const { GoogleAuth } = require('google-auth-library');
-  const auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
-  const client = await auth.getClient();
-  const accessToken = await client.getAccessToken();
-  return accessToken?.token || '';
-}
 
 /**
  * Synthesize a concise answer from retrieved contexts using Vertex AI Generative AI (Gemini) via REST API
@@ -96,92 +86,376 @@ async function synthesizeAnswer(
   projectId: string,
   location: string
 ): Promise<string> {
+  console.log('=== SYNTHESIS FUNCTION CALLED ===', {
+    userQuery: userQuery.substring(0, 50),
+    contextsCount: contexts.length,
+    projectId,
+    location,
+    firstContextLength: contexts[0]?.length || 0,
+    firstContextPreview: contexts[0]?.substring(0, 100) || 'N/A',
+  });
+  
   try {
-    // Get access token
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      throw new Error('Failed to get access token');
-    }
-
-    // Combine contexts (use top 5)
+    // Combine contexts (use top 10 for better coverage)
     const combinedContext = contexts
-      .slice(0, 5)
+      .slice(0, 10)
       .join('\n\n---\n\n');
 
-    // Create prompt for synthesis
-    const systemInstruction = `You are a helpful assistant that provides accurate information about livestock health based on veterinary documents. Provide clear, concise answers (2-4 paragraphs, 200-400 words) using simple, professional language appropriate for farmers. Do not include disclaimers, legal text, or document metadata.`;
+    // Create prompt for synthesis - improved to match Google Cloud Console format
+    const systemInstruction = `You are a helpful assistant that provides accurate information about livestock health based on veterinary documents. 
 
-    const userPrompt = `Based on the following context from veterinary documents, answer this question: ${userQuery}
+When answering questions about diseases or conditions:
+- Organize your answer by categories (e.g., Bacterial Diseases, Viral Diseases, Other Conditions)
+- List each disease with a brief, clear description
+- Use simple, professional language appropriate for farmers
+- Do NOT include disclaimers, legal text, document metadata, or formatting instructions
+- Focus on providing a comprehensive, well-structured list of the requested information
+- For questions asking "what are common X" or "list X", provide a clear, organized list format`;
+
+    // Detect if this is a list-type question
+    const isListQuestion = /^(what are|list|name|tell me about|common|types of|kinds of)/i.test(userQuery);
+    
+    const userPrompt = isListQuestion 
+      ? `Based on the following context from veterinary documents, provide a comprehensive, well-organized list answering: ${userQuery}
 
 Context:
-${combinedContext}`;
+${combinedContext}
 
-    // Call Vertex AI Generative AI REST API
-    const apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-1.5-flash:generateContent`;
+Format your answer as a clear list with categories where appropriate. Include all relevant items from the context.`
+      : `Based on the following context from veterinary documents, answer this question: ${userQuery}
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: userPrompt,
-          }],
-        }],
-        systemInstruction: {
-          parts: [{
-            text: systemInstruction,
-          }],
-        },
-        generationConfig: {
-          maxOutputTokens: 1000,
-          temperature: 0.7,
-          topP: 0.95,
-        },
-      }),
+Context:
+${combinedContext}
+
+Provide a clear, well-organized answer with specific examples from the context.`;
+
+    // Combine system instruction and user prompt (define once, used by both Vertex AI and Gemini API)
+    const fullPrompt = `${systemInstruction}\n\n${userPrompt}`;
+
+    // Use Vertex AI REST API directly (more reliable than Google Gen AI SDK)
+    // Try multiple regions and models - start with europe-west3 where RAG corpus is
+    // Note: Gemini models may not be available in all regions
+    const regionsToTry = ['europe-west3', 'us-central1', 'us-east1'];
+    const modelsToTry = [
+      'gemini-1.5-pro-002',  // Try versioned models first (more reliable)
+      'gemini-1.5-flash-002',
+      'gemini-1.5-pro',       // Fallback to unversioned
+      'gemini-1.5-flash',
+      'gemini-1.0-pro',
+      'gemini-pro',           // Legacy model name
+    ];
+
+    // Get authentication token
+    const auth = new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Gemini API error:', response.status, errorData);
-      throw new Error(`Gemini API error: ${response.status}`);
-    }
+    let lastError: any = null;
 
-    const data = await response.json() as any;
-    
-    // Extract generated text
-    const candidates = data.candidates || [];
-    if (candidates.length > 0 && candidates[0].content?.parts) {
-      const textParts = candidates[0].content.parts
-        .filter((part: any) => part.text)
-        .map((part: any) => part.text);
-      
-      if (textParts.length > 0) {
-        return textParts.join('\n').trim();
+    for (const region of regionsToTry) {
+      try {
+        console.log(`tRPC - ===== TRYING REGION: ${region} =====`, {
+          projectId: projectId,
+          regionIndex: regionsToTry.indexOf(region) + 1,
+          totalRegions: regionsToTry.length,
+        });
+
+        // Get access token for this region
+        console.log(`tRPC - Getting access token for ${region}...`);
+        const accessToken = await auth.getAccessToken();
+        if (!accessToken) {
+          console.error(`tRPC - Failed to get access token for ${region}`);
+          throw new Error('Failed to get access token');
+        }
+        console.log(`tRPC - Access token obtained for ${region} (length: ${accessToken?.length || 0})`);
+
+        for (const modelName of modelsToTry) {
+          try {
+            console.log(`tRPC - Trying Gemini model: ${modelName} in ${region}`);
+
+            // Use Vertex AI REST API directly
+            // Try both publisher model format and direct model format
+            let apiUrl = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${modelName}:generateContent`;
+            
+            // For europe-west3, models might be in a different format
+            // If this fails, we'll try alternative formats in the catch block
+
+            console.log(`tRPC - Calling Vertex AI REST API for ${modelName}...`);
+            
+            const fetchResponse = await Promise.race([
+              fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [{ text: fullPrompt }]
+                  }],
+                  generationConfig: {
+                    maxOutputTokens: 2000,
+                    temperature: 0.7,
+                    topP: 0.95,
+                  },
+                }),
+              }),
+              new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+              ),
+            ]);
+
+            if (!fetchResponse.ok) {
+              const errorText = await fetchResponse.text();
+              let errorData: any;
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { error: errorText };
+              }
+              throw new Error(JSON.stringify(errorData));
+            }
+
+            const result = await fetchResponse.json() as any;
+            console.log(`tRPC - Received response from ${modelName}, checking structure...`);
+
+            // Extract text from Vertex AI response format
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (text && text.trim().length > 0) {
+              const generatedText = text.trim();
+              console.log(`tRPC - Synthesis successful with ${modelName} in ${region}:`, {
+                textLength: generatedText.length,
+                preview: generatedText.substring(0, 100),
+              });
+              return generatedText;
+            }
+            
+            console.warn(`tRPC - Model ${modelName} in ${region} returned no text, trying next model`);
+            continue;
+          } catch (error: any) {
+            const errorMsg = error.message || String(error);
+            const errorStr = String(errorMsg);
+            
+            // If 404, try alternative API format for any region
+            if (errorStr.includes('404')) {
+              console.log(`tRPC - Trying alternative API format for ${modelName} in ${region}...`);
+              try {
+                // Try without publisher path (direct model access)
+                const altApiUrl = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/models/${modelName}:generateContent`;
+                
+                const altResponse = await Promise.race([
+                  fetch(altApiUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      contents: [{
+                        parts: [{ text: fullPrompt }]
+                      }],
+                      generationConfig: {
+                        maxOutputTokens: 2000,
+                        temperature: 0.7,
+                        topP: 0.95,
+                      },
+                    }),
+                  }),
+                  new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+                  ),
+                ]);
+
+                if (altResponse.ok) {
+                  const altResult = await altResponse.json() as any;
+                  const altText = altResult.candidates?.[0]?.content?.parts?.[0]?.text;
+                  
+                  if (altText && altText.trim().length > 0) {
+                    const generatedText = altText.trim();
+                    console.log(`tRPC - Synthesis successful with ${modelName} in ${region} (alternative format):`, {
+                      textLength: generatedText.length,
+                      preview: generatedText.substring(0, 100),
+                    });
+                    return generatedText;
+                  }
+                }
+              } catch (altError: any) {
+                console.warn(`tRPC - Alternative format also failed for ${modelName} in ${region}`);
+              }
+            }
+            
+            console.error(`tRPC - Model ${modelName} in ${region} failed:`, {
+              error: errorMsg,
+              stack: error.stack,
+              errorType: error.constructor?.name,
+            });
+            lastError = { region, model: modelName, error: errorMsg, errorType: error.constructor?.name };
+            continue; // Try next model
+          }
+        }
+      } catch (error: any) {
+        const errorMsg = error.message || String(error);
+        console.error(`tRPC - Region ${region} failed:`, {
+          region,
+          error: errorMsg,
+          stack: error.stack,
+          errorType: error.constructor?.name,
+        });
+        lastError = { region, error: errorMsg };
+        continue; // Try next region
       }
     }
 
-    // Fallback if no text generated
-    throw new Error('No text generated from Gemini');
+    // If all Vertex AI models failed, try Gemini API directly as fallback
+    // Check both process.env and Firebase config (for backward compatibility)
+    const geminiApiKey = process.env.GEMINI_API_KEY || (functions.config().gemini?.api_key as string | undefined);
+    if (geminiApiKey) {
+      console.log('tRPC - All Vertex AI models failed, trying Gemini API directly...');
+      try {
+        // First, list available models to see what's actually available
+        try {
+          const listModelsUrl = `https://generativelanguage.googleapis.com/v1/models?key=${geminiApiKey}`;
+          const listResponse = await fetch(listModelsUrl);
+          if (listResponse.ok) {
+            const modelsList = await listResponse.json() as any;
+            const availableModels = modelsList.models?.map((m: any) => m.name?.replace('models/', '') || m.name) || [];
+            console.log('tRPC - Available Gemini API models:', availableModels);
+          }
+        } catch (listError) {
+          console.warn('tRPC - Could not list models, using default list');
+        }
+        
+        // Use Gemini API directly (not Vertex AI)
+        // Use the actual available models from the API
+        const geminiModels = [
+          'gemini-2.5-pro',        // Best quality
+          'gemini-2.5-flash',      // Fast and good quality
+          'gemini-2.0-flash',      // Alternative
+          'gemini-2.0-flash-001',  // Versioned
+        ];
+        
+        for (const modelName of geminiModels) {
+          try {
+            console.log(`tRPC - Trying Gemini API model: ${modelName}`);
+            
+            // Gemini API uses different endpoint format
+            const geminiApiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${geminiApiKey}`;
+            
+            const geminiResponse = await Promise.race([
+              fetch(geminiApiUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [{ text: fullPrompt }]
+                  }],
+                  generationConfig: {
+                    maxOutputTokens: 2000,
+                    temperature: 0.7,
+                    topP: 0.95,
+                  },
+                }),
+              }),
+              new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+              ),
+            ]);
+
+            if (geminiResponse.ok) {
+              const geminiResult = await geminiResponse.json() as any;
+              console.log('tRPC - Gemini API response structure:', {
+                hasCandidates: !!geminiResult.candidates,
+                hasText: !!geminiResult.text,
+                keys: Object.keys(geminiResult || {}),
+              });
+              
+              // Try multiple response formats
+              let geminiText = '';
+              if (geminiResult.candidates?.[0]?.content?.parts?.[0]?.text) {
+                geminiText = geminiResult.candidates[0].content.parts[0].text;
+              } else if (geminiResult.text) {
+                geminiText = geminiResult.text;
+              } else if (geminiResult.response?.text) {
+                geminiText = geminiResult.response.text;
+              }
+              
+              if (geminiText && geminiText.trim().length > 0) {
+                const generatedText = geminiText.trim();
+                console.log(`tRPC - Synthesis successful with Gemini API ${modelName}:`, {
+                  textLength: generatedText.length,
+                  preview: generatedText.substring(0, 100),
+                });
+                return generatedText;
+              } else {
+                console.warn(`tRPC - Gemini API ${modelName} returned no text. Response:`, JSON.stringify(geminiResult).substring(0, 200));
+              }
+            } else {
+              const errorText = await geminiResponse.text();
+              console.warn(`tRPC - Gemini API ${modelName} failed: ${geminiResponse.status} - ${errorText}`);
+            }
+          } catch (geminiError: any) {
+            console.warn(`tRPC - Gemini API ${modelName} error:`, geminiError.message);
+            continue;
+          }
+        }
+      } catch (fallbackError: any) {
+        console.error('tRPC - Gemini API fallback also failed:', fallbackError.message);
+      }
+    } else {
+      console.warn('tRPC - GEMINI_API_KEY not set, skipping Gemini API fallback');
+    }
+
+    // If all models and regions failed, throw error with details
+    throw new Error(`All Gemini models failed. Last error: ${JSON.stringify(lastError)}`);
   } catch (error: any) {
     console.error('LLM synthesis error:', error);
-    // Fallback: return first context truncated intelligently
-    if (contexts.length > 0) {
-      const truncated = contexts[0].substring(0, 800);
-      const lastPeriod = truncated.lastIndexOf('.');
-      const lastNewline = truncated.lastIndexOf('\n');
-      const cutPoint = Math.max(lastPeriod, lastNewline);
-      
-      if (cutPoint > 400) {
-        return truncated.substring(0, cutPoint + 1);
-      }
-      return truncated + '...';
-    }
+    // Enhanced fallback: extract and organize information from all contexts
+    return formatContextsAsAnswer(userQuery, contexts);
+  }
+}
+
+/**
+ * Format contexts into a structured answer when LLM synthesis is not available
+ * This extracts relevant information and organizes it similar to Google Cloud Console
+ */
+function formatContextsAsAnswer(query: string, contexts: string[]): string {
+  if (contexts.length === 0) {
     return 'Unable to generate answer. Please try rephrasing your question.';
   }
+
+  // Combine and clean contexts
+  const combined = contexts.slice(0, 5).join('\n\n---\n\n');
+  
+  // Remove metadata sections that aren't useful
+  let cleaned = combined
+    .replace(/Appearance:.*?behaviour\./gs, '')
+    .replace(/Natural functions:.*?milk\./gs, '')
+    .replace(/Discharges:.*?discharge\./gs, '')
+    .replace(/Swellings:.*?appearances\./gs, '')
+    .replace(/DISEASE DIAGNOSIS/g, '')
+    .replace(/CATEGORIES OF DISEASES/g, '')
+    .replace(/CONTROL OF DISEASES/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Extract meaningful sentences
+  const sentences = cleaned.split(/[.!?]\s+/).filter(s => s.length > 30 && s.length < 500);
+  
+  // Take first 15-20 sentences for a comprehensive answer
+  const answer = sentences.slice(0, 20).join('. ').trim();
+  
+  if (answer.length < 100) {
+    // If still too short, use first context with better formatting
+    const firstContext = contexts[0];
+    const firstSentences = firstContext.split(/[.!?]\s+/).filter(s => s.length > 30);
+    return firstSentences.slice(0, 10).join('. ').trim() + (firstSentences.length > 10 ? '...' : '');
+  }
+
+  return answer + (sentences.length > 20 ? '...' : '');
 }
 
 /**
@@ -195,7 +469,7 @@ ${combinedContext}`;
  * 
  * Environment variables required (in functions/.env or Firebase config):
  * - RAG_ENGINE_PROJECT_ID: Your Google Cloud project ID
- * - RAG_ENGINE_LOCATION: Location of RAG Engine (e.g., us-east1)
+ * - RAG_ENGINE_LOCATION: Location of RAG Engine (e.g., europe-west3)
  * - RAG_ENGINE_ID: Your RAG Engine ID
  * 
  * POST /trpc
@@ -203,7 +477,7 @@ ${combinedContext}`;
  */
 export const trpc = onRequest(
   {
-    region: process.env.RAG_ENGINE_LOCATION || 'us-east1',
+    region: process.env.RAG_ENGINE_LOCATION || 'europe-west3', // Updated to europe-west3 for new RAG engine
     maxInstances: 10,
     timeoutSeconds: 60,
     memory: '512MiB',
@@ -288,12 +562,18 @@ export const trpc = onRequest(
       let context: string | undefined;
 
       // Handle different request formats
+      // Frontend may send: { procedure: 'health.askRag', prompt: string, context?: string }
+      // We ignore the procedure field and extract prompt
       if (body.prompt) {
         // Direct format: { prompt: string, context?: string }
+        // Also handles: { procedure: string, prompt: string, context?: string }
         prompt = body.prompt;
         context = body.context;
         console.log('tRPC Handler - Prompt extracted:', prompt);
         console.log('tRPC Handler - Context:', context);
+        if (body.procedure) {
+          console.log('tRPC Handler - Procedure field received (ignored):', body.procedure);
+        }
       } else if (body.query) {
         // Alternative format: { query: string, context?: string }
         prompt = body.query;
@@ -358,9 +638,9 @@ export const trpc = onRequest(
         timestamp: new Date().toISOString(),
       });
       
-      // Verify we're using the correct corpus ID
-      if (ragEngineId !== '6301661778598166528') {
-        console.error('WARNING: Using incorrect RAG Engine ID:', ragEngineId, 'Expected: 6301661778598166528');
+      // Verify we're using the correct corpus ID (europe-west3 RAG engine)
+      if (ragEngineId !== '6917529027641081856') {
+        console.warn('Using RAG Engine ID:', ragEngineId, 'Expected: 6917529027641081856 (europe-west3)');
       }
 
       // Use Vertex AI SDK instead of REST API for better reliability
@@ -452,36 +732,59 @@ export const trpc = onRequest(
 
         // Extract contexts and synthesize answer using LLM
         let responseText = 'No response generated';
-        if (contextsArray.length > 0) {
-          // Extract text from all contexts
-          const contextTexts = contextsArray
-            .map((ctx: any) => {
-              return ctx.text || ctx.content || ctx.contextText || 
-                     ctx.ragContext?.text || ctx.ragContext?.content || '';
-            })
-            .filter((text: string) => text && String(text).trim().length > 0)
-            .map((text: string) => String(text).trim());
-          
-          if (contextTexts.length > 0) {
-            console.log('tRPC Handler - Synthesizing answer from', contextTexts.length, 'contexts');
+        // Extract text from all contexts (outside if block for fallback access)
+        const contextTexts = contextsArray
+          .map((ctx: any) => {
+            return ctx.text || ctx.content || ctx.contextText || 
+                   ctx.ragContext?.text || ctx.ragContext?.content || '';
+          })
+          .filter((text: string) => text && String(text).trim().length > 0)
+          .map((text: string) => String(text).trim());
+        
+        // DIAGNOSTIC LOGGING: Check why synthesis might not be called
+        console.log('tRPC Handler - contextTexts extraction result:', {
+          contextsArrayLength: contextsArray.length,
+          contextTextsLength: contextTexts.length,
+          firstContextKeys: contextsArray[0] ? Object.keys(contextsArray[0]) : [],
+          firstContextHasText: !!(contextsArray[0]?.text),
+          firstContextTextLength: contextsArray[0]?.text?.length || 0,
+          firstContextTextPreview: contextsArray[0]?.text?.substring(0, 100) || 'N/A',
+          sampleContextStructure: contextsArray[0] ? {
+            hasText: !!contextsArray[0].text,
+            hasContent: !!contextsArray[0].content,
+            hasContextText: !!contextsArray[0].contextText,
+            hasRagContext: !!contextsArray[0].ragContext,
+            keys: Object.keys(contextsArray[0]),
+          } : null,
+        });
+        
+        if (contextTexts.length > 0) {
+          console.log('tRPC Handler - Synthesizing answer from', contextTexts.length, 'contexts');
+          console.log('tRPC Handler - About to call synthesizeAnswer with:', {
+            promptLength: prompt.length,
+            contextsCount: contextTexts.length,
+            projectId,
+            location,
+          });
+          try {
             // Use LLM to synthesize a concise, well-structured answer
             responseText = await synthesizeAnswer(prompt, contextTexts, projectId, location);
             console.log('tRPC Handler - Synthesized answer length:', responseText.length);
+            console.log('tRPC Handler - Synthesized answer preview:', responseText.substring(0, 200));
+          } catch (synthesisError: any) {
+            console.error('tRPC Handler - Synthesis failed with error:', {
+              message: synthesisError.message,
+              stack: synthesisError.stack,
+              error: synthesisError,
+            });
+            // Will fall through to enhanced fallback
           }
         }
         
-        // Fallback if synthesis didn't work
-        if (responseText === 'No response generated') {
-          const responseLevelText = 
-            (responseAny.response && String(responseAny.response).trim()) ||
-            (responseAny.text && String(responseAny.text).trim());
-          
-          if (responseLevelText) {
-            responseText = responseLevelText
-              .replace(/\r\n/g, '\n')
-              .replace(/\n{3,}/g, '\n\n')
-              .trim();
-          }
+        // Fallback if synthesis didn't work - use enhanced formatting
+        if (responseText === 'No response generated' || responseText.length < 50) {
+          console.log('tRPC Handler - Using enhanced fallback formatting');
+          responseText = formatContextsAsAnswer(prompt, contextTexts);
         }
         
         console.log('tRPC Handler - Final responseText length:', responseText.length);
@@ -523,13 +826,140 @@ export const trpc = onRequest(
           }
         });
         
+        // Convert markdown to HTML for styled display (without visible markdown markers)
+        // Process line by line to handle different markdown elements properly
+        const lines = responseText.split('\n');
+        const htmlLines: string[] = [];
+        let inList = false;
+        let currentParagraph: string[] = [];
+        
+        const flushParagraph = () => {
+          if (currentParagraph.length > 0) {
+            const paraText = currentParagraph.join(' ').trim();
+            if (paraText) {
+              // Process bold and italic in paragraphs
+              const processedText = paraText
+                .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>')
+                .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+              htmlLines.push(`<p class="mb-3 leading-relaxed text-foreground">${processedText}</p>`);
+            }
+            currentParagraph = [];
+          }
+        };
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          // Empty line - flush paragraph and close list if needed
+          if (!line) {
+            flushParagraph();
+            if (inList) {
+              htmlLines.push('</ul>');
+              inList = false;
+            }
+            continue;
+          }
+          
+          // Headers
+          if (line.startsWith('### ')) {
+            flushParagraph();
+            if (inList) {
+              htmlLines.push('</ul>');
+              inList = false;
+            }
+            let text = line.substring(4).trim();
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
+            htmlLines.push(`<h3 class="text-lg font-bold mt-4 mb-2 text-foreground">${text}</h3>`);
+          } else if (line.startsWith('## ')) {
+            flushParagraph();
+            if (inList) {
+              htmlLines.push('</ul>');
+              inList = false;
+            }
+            let text = line.substring(3).trim();
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
+            htmlLines.push(`<h2 class="text-xl font-bold mt-5 mb-3 text-foreground">${text}</h2>`);
+          } else if (line.startsWith('# ')) {
+            flushParagraph();
+            if (inList) {
+              htmlLines.push('</ul>');
+              inList = false;
+            }
+            let text = line.substring(2).trim();
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
+            htmlLines.push(`<h1 class="text-2xl font-bold mt-6 mb-4 text-foreground">${text}</h1>`);
+          }
+          // List items
+          else if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+            flushParagraph();
+            if (!inList) {
+              htmlLines.push('<ul class="list-disc space-y-1 my-2 ml-4">');
+              inList = true;
+            }
+            // Remove list marker and process content
+            const content = line.replace(/^\s*[-*+]\s+/, '').replace(/^\s*\d+\.\s+/, '').trim();
+            // Process bold text in list items
+            const processedContent = content
+              .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
+            htmlLines.push(`<li class="mb-1 text-foreground">${processedContent}</li>`);
+          }
+          // Regular paragraph text (accumulate until empty line or special element)
+          else {
+            if (inList) {
+              htmlLines.push('</ul>');
+              inList = false;
+            }
+            currentParagraph.push(line);
+          }
+        }
+        
+        // Flush any remaining paragraph
+        flushParagraph();
+        
+        // Close any open list
+        if (inList) {
+          htmlLines.push('</ul>');
+        }
+        
+        let cleanedText = htmlLines.join('\n');
+
+        // Improved confidence score calculation
+        // RAG scores are typically 0-1, but we want to show higher confidence for good answers
+        let confidence = 0.8; // Default confidence
+        
+        if (scores.length > 0) {
+          const maxScore = Math.max(...scores);
+          const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+          
+          // If we have multiple high-quality sources, boost confidence
+          const highQualitySources = scores.filter(s => s > 0.5).length;
+          
+          // Calculate confidence: combine max score, average, and source count
+          // Higher scores and more sources = higher confidence
+          confidence = Math.min(0.95, Math.max(0.7, 
+            (maxScore * 0.6) + (avgScore * 0.3) + (Math.min(highQualitySources / 5, 0.1))
+          ));
+        } else if (responseAny.confidence) {
+          confidence = Math.min(0.95, Math.max(0.7, responseAny.confidence));
+        }
+        
+        // If synthesis was successful (not fallback), boost confidence significantly
+        // Check if this looks like a synthesized answer (not raw extraction)
+        const isSynthesized = responseText.length > 200 && 
+          !responseText.includes('Table 3.') && 
+          !responseText.includes('Chapter') &&
+          !responseText.startsWith('Table') &&
+          (responseText.includes('•') || responseText.includes('**') || responseText.includes('*'));
+        
+        if (isSynthesized) {
+          // Synthesized answers are high quality - boost confidence
+          confidence = Math.min(0.95, Math.max(confidence, 0.85));
+        }
+
         const ragResponse: RagResponse = {
-          text: responseText,
+          text: cleanedText,
           sources: Array.from(sourceMap.values()), // Convert Map to array of unique sources
-          // Use the highest confidence score from the RAG engine (maximum score = highest confidence)
-          confidence: scores.length > 0 
-            ? Math.max(...scores)  // Use the maximum score (highest confidence)
-            : (responseAny.confidence || 0.8),
+          confidence: confidence,
         };
 
         // Log successful request
