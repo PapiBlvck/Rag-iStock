@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SignIn } from '@/components/auth/SignIn';
 import { SignUp } from '@/components/auth/SignUp';
 import { AppLayout, type AppRoute } from '@/components/layout/AppLayout';
+import { LandingBackground } from '@/components/layout/LandingBackground';
 import { Loader2 } from 'lucide-react';
 
 // Lazy load page components for code splitting
@@ -47,26 +48,26 @@ function App() {
     }
   }, [currentRoute, isAuthenticated]);
 
-  // Not authenticated - show auth screen
+  // Not authenticated - show auth screen with landing background
   if (!isAuthenticated) {
     if (authView === 'sign-in') {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-background p-4">
+        <LandingBackground>
           <SignIn
             onSwitchToSignUp={() => setAuthView('sign-up')}
             onSuccess={() => {}}
           />
-        </div>
+        </LandingBackground>
       );
     }
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-background p-4">
+      <LandingBackground>
         <SignUp
           onSwitchToSignIn={() => setAuthView('sign-in')}
           onSuccess={() => {}}
         />
-      </div>
+      </LandingBackground>
     );
   }
 
@@ -86,7 +87,7 @@ function App() {
       case 'chatbot':
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <Chatbot />
+            <Chatbot currentRoute={currentRoute} onRouteChange={setCurrentRoute} />
           </Suspense>
         );
       case 'settings':
@@ -98,7 +99,7 @@ function App() {
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <Chatbot />
+            <Chatbot currentRoute={currentRoute} onRouteChange={setCurrentRoute} />
           </Suspense>
         );
     }
