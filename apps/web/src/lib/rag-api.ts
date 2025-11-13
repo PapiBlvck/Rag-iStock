@@ -48,29 +48,6 @@ export async function askRag(input: RagRequest): Promise<RagResponse> {
   }
 
   try {
-    // Ensure we're sending a valid request body
-    const requestBody = {
-      prompt: input.query,
-      ...(input.context && { context: input.context }),
-    };
-
-    // Validate the request before sending (matching server-side validation)
-    if (!requestBody.prompt || typeof requestBody.prompt !== 'string') {
-      throw new Error('Query is required and must be a string');
-    }
-
-    if (requestBody.prompt.length < 3) {
-      throw new Error('Query must be at least 3 characters long');
-    }
-
-    if (requestBody.prompt.length > 2000) {
-      throw new Error('Query must be less than 2000 characters');
-    }
-
-    // Debug logging (can be removed in production)
-    console.log('Sending RAG request to:', RAG_API_URL);
-    console.log('Request body:', requestBody);
-
     const response = await fetch(RAG_API_URL, {
       method: 'POST',
       headers: {
@@ -79,7 +56,6 @@ export async function askRag(input: RagRequest): Promise<RagResponse> {
         // Remove if authentication is disabled in the function
       },
       body: JSON.stringify({
-        procedure: 'health.askRag', // Add procedure name if server requires it
         prompt: input.query,
         ...(input.context && { context: input.context }),
       }),
@@ -88,44 +64,16 @@ export async function askRag(input: RagRequest): Promise<RagResponse> {
     // Handle HTTP errors
     if (!response.ok) {
       let errorMessage = `HTTP error! status: ${response.status}`;
-      let errorDetails: any = null;
-      
-      // Clone response so we can read it multiple times if needed
-      const responseClone = response.clone();
       
       try {
         const errorData = await response.json();
-        errorMessage = errorData.error || errorData.message || errorMessage;
-        errorDetails = errorData;
-        
-        // Log the full error response for debugging
-        console.error('Server error response:', errorData);
-        
-        // Log the received body if server provides it
-        if (errorData.received) {
-          console.error('Server received body:', errorData.received);
-        }
-      } catch (e) {
-        // If response is not JSON, try to get text from the clone
-        try {
-          const text = await responseClone.text();
-          console.error('Server error response (text):', text);
-          errorMessage = text || response.statusText || errorMessage;
-        } catch {
-          errorMessage = response.statusText || errorMessage;
-        }
+        errorMessage = errorData.error?.message || errorData.message || errorMessage;
+      } catch {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || errorMessage;
       }
 
       // Handle specific status codes
-      if (response.status === 400) {
-        // For 400 errors, show more details
-        const detailsMsg = errorDetails?.details 
-          ? ` Details: ${errorDetails.details}` 
-          : errorDetails?.received 
-            ? ` Server received: ${JSON.stringify(errorDetails.received)}`
-            : '';
-        throw new Error(`Bad Request: ${errorMessage}${detailsMsg}`);
-      }
       if (response.status === 401) {
         throw new Error('Authentication failed. Please sign in again.');
       }

@@ -11,6 +11,7 @@ export const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000',
+  'http://localhost:5176',
   // TODO: Add your production frontend URL here
   // 'https://my-app-domain.com',
   // 'https://www.my-app-domain.com',
@@ -29,6 +30,9 @@ export function setCorsHeaders(req: any, res: Response): string | null {
   let allowedOrigin: string | null = null;
   
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    allowedOrigin = origin;
+  } else if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    // For development, allow localhost origins even if not in list
     allowedOrigin = origin;
   } else if (!origin) {
     // No origin header (e.g., same-origin request, Postman, etc.)
@@ -64,6 +68,9 @@ export function handleCorsPreflight(req: any, res: Response): boolean {
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin as string | undefined;
     
+    console.log('CORS Preflight - Origin:', origin);
+    console.log('CORS Preflight - Allowed origins:', ALLOWED_ORIGINS);
+    
     // Check if origin is in allowed list
     if (origin && ALLOWED_ORIGINS.includes(origin)) {
       // Set all required CORS headers for preflight
@@ -72,17 +79,30 @@ export function handleCorsPreflight(req: any, res: Response): boolean {
       res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
       res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, trpc-accept-type, trpc-content-type');
       res.set('Access-Control-Max-Age', '3600');
+      console.log('CORS Preflight - Allowed origin:', origin);
     } else if (origin) {
       // Origin specified but not allowed - still respond to preflight
       // Browser will check Access-Control-Allow-Origin header
-      res.set('Access-Control-Allow-Origin', '');
-      res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, trpc-accept-type, trpc-content-type');
+      console.warn('CORS Preflight - Origin not in allowed list:', origin);
+      // For development, allow localhost origins even if not in list
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        res.set('Access-Control-Allow-Origin', origin);
+        res.set('Access-Control-Allow-Credentials', 'true');
+        res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, trpc-accept-type, trpc-content-type');
+        res.set('Access-Control-Max-Age', '3600');
+        console.log('CORS Preflight - Allowed localhost origin:', origin);
+      } else {
+        res.set('Access-Control-Allow-Origin', '');
+        res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, trpc-accept-type, trpc-content-type');
+      }
     } else {
       // No origin header - allow with wildcard (no credentials)
       res.set('Access-Control-Allow-Origin', '*');
       res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
       res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, trpc-accept-type, trpc-content-type');
+      console.log('CORS Preflight - No origin header, using wildcard');
     }
     
     // CRITICAL: Send 204 immediately and stop all further execution
