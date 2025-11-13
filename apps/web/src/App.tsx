@@ -87,7 +87,7 @@ function App() {
       case 'chatbot':
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <Chatbot />
+            <Chatbot currentRoute={currentRoute} onRouteChange={setCurrentRoute} />
           </Suspense>
         );
       case 'settings':
@@ -99,7 +99,7 @@ function App() {
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <Chatbot />
+            <Chatbot currentRoute={currentRoute} onRouteChange={setCurrentRoute} />
           </Suspense>
         );
     }
