@@ -30,10 +30,10 @@ export function AppLayout({
             {/* Back Button - Clickable to go back to chatbot */}
             <button
               onClick={() => onRouteChange('chatbot')}
-              className="flex items-center gap-2 hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md px-2 py-1.5"
+              className="group flex items-center gap-2 hover:bg-accent rounded-md px-2 py-1.5 focus:outline-none transition-all duration-200 hover:scale-105 active:scale-95"
               aria-label="Go back to chat"
             >
-              <ArrowLeft className="h-5 w-5 text-foreground" aria-hidden="true" />
+              <ArrowLeft className="h-5 w-5 text-foreground transition-transform duration-200 group-hover:-translate-x-1" aria-hidden="true" />
               <span className="text-base font-medium text-foreground">Back</span>
             </button>
 

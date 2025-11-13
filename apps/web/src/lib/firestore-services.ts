@@ -91,6 +91,56 @@ export async function deleteChat(userId: string, chatId: string): Promise<void> 
 }
 
 // ============================================================================
+// Message Feedback Service
+// ============================================================================
+
+export interface MessageFeedback {
+  messageId: string;
+  messageText: string;
+  feedback: 'like' | 'dislike' | null;
+  timestamp: Date | string;
+}
+
+const MESSAGE_FEEDBACK_COLLECTION = 'messageFeedback';
+
+export async function saveMessageFeedback(
+  userId: string,
+  messageId: string,
+  feedback: MessageFeedback
+): Promise<void> {
+  const feedbackId = `${userId}_${messageId}`;
+  await setDocument(MESSAGE_FEEDBACK_COLLECTION, feedbackId, {
+    ...feedback,
+    userId,
+    messageId,
+    timestamp: typeof feedback.timestamp === 'string' 
+      ? feedback.timestamp 
+      : dateToTimestamp(feedback.timestamp as Date),
+    updatedAt: dateToTimestamp(new Date()),
+  });
+}
+
+export async function getMessageFeedback(
+  userId: string,
+  messageId: string
+): Promise<MessageFeedback | null> {
+  const feedbackId = `${userId}_${messageId}`;
+  const feedback = await getDocument<MessageFeedback & { userId: string }>(
+    MESSAGE_FEEDBACK_COLLECTION,
+    feedbackId
+  );
+  if (!feedback || feedback.userId !== userId) {
+    return null;
+  }
+  return {
+    messageId: feedback.messageId,
+    messageText: feedback.messageText,
+    feedback: feedback.feedback,
+    timestamp: feedback.timestamp,
+  };
+}
+
+// ============================================================================
 // Feed Optimizations Service
 // ============================================================================
 

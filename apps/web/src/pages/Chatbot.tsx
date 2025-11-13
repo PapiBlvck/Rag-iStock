@@ -6,7 +6,7 @@ import { useAskRag } from '@/lib/trpc';
 import { ChatInterface } from '@/components/chatbot/ChatInterface';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Send, History, Edit2, Trash2, X, Check, Loader2, Plus } from 'lucide-react';
+import { Send, History, Edit2, Trash2, X, Check, Loader2, Plus, Mic, MicOff, Square } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Sheet,
@@ -29,6 +29,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Sidebar } from '@/components/layout/Sidebar';
 import type { AppRoute } from '@/components/layout/AppLayout';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface Message {
   id: string;
@@ -36,6 +37,7 @@ interface Message {
   text: string;
   timestamp: Date;
   response?: RagResponse;
+  feedback?: 'like' | 'dislike' | null;
 }
 
 interface ChatHistoryItem {
@@ -75,7 +77,37 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
   const historyItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const { toast } = useToast();
 
-  // Load chat history from Firestore
+  const form = useForm<QueryForm>({
+    resolver: zodResolver(querySchema),
+    defaultValues: {
+      query: '',
+    },
+  });
+
+  // Voice input
+  const {
+    isListening,
+    transcript,
+    isSupported: isVoiceSupported,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      form.setValue('query', text, { shouldValidate: true });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Voice Input Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+    continuous: false,
+    interimResults: true,
+  });
+
+  // Load chat history from Firestore and restore saved chat
   useEffect(() => {
     if (!user?.id) return;
 
@@ -88,9 +120,95 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
           timestamp: r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp),
           title: r.title || r.query?.substring(0, 50) || 'Untitled Chat',
         }));
-        setChatHistory(parsedHistory.sort((a: ChatHistoryItem, b: ChatHistoryItem) => 
+        const sortedHistory = parsedHistory.sort((a: ChatHistoryItem, b: ChatHistoryItem) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ));
+        );
+        setChatHistory(sortedHistory);
+
+        // Restore saved chat state from localStorage
+        try {
+          const savedChatId = localStorage.getItem(`istock_current_chat_${user.id}`);
+          const savedChatTitle = localStorage.getItem(`istock_current_chat_title_${user.id}`);
+          const savedMessages = localStorage.getItem(`istock_current_messages_${user.id}`);
+
+          if (savedChatId && savedChatTitle) {
+            // Prioritize localStorage messages (full conversation) over Firestore (single Q&A)
+            if (savedMessages) {
+              try {
+                const parsedMessages = JSON.parse(savedMessages);
+                // Convert timestamp strings back to Date objects
+                const restoredMessages = parsedMessages.map((msg: any) => ({
+                  ...msg,
+                  timestamp: new Date(msg.timestamp),
+                }));
+                
+                // Only restore if we have valid messages
+                if (restoredMessages.length > 0) {
+                  setMessages(restoredMessages);
+                  setCurrentChatId(savedChatId);
+                  setCurrentChatTitle(savedChatTitle);
+                }
+              } catch (e) {
+                console.error('Failed to parse saved messages:', e);
+                // Fallback to Firestore if localStorage parse fails
+                const savedChat = sortedHistory.find((chat) => chat.id === savedChatId);
+                if (savedChat) {
+                  setCurrentChatId(savedChat.id);
+                  setCurrentChatTitle(savedChat.title);
+                  const timestamp = savedChat.timestamp instanceof Date ? savedChat.timestamp : new Date(savedChat.timestamp);
+                  setMessages([
+                    {
+                      id: `user-${savedChat.id}`,
+                      type: 'user',
+                      text: savedChat.query,
+                      timestamp,
+                    },
+                    {
+                      id: `ai-${savedChat.id}`,
+                      type: 'ai',
+                      text: savedChat.response,
+                      timestamp,
+                      response: {
+                        text: savedChat.response,
+                        sources: savedChat.sources || [],
+                        confidence: savedChat.confidence,
+                      },
+                    },
+                  ]);
+                }
+              }
+            } else {
+              // No localStorage messages, try Firestore
+              const savedChat = sortedHistory.find((chat) => chat.id === savedChatId);
+              if (savedChat) {
+                setCurrentChatId(savedChat.id);
+                setCurrentChatTitle(savedChat.title);
+                const timestamp = savedChat.timestamp instanceof Date ? savedChat.timestamp : new Date(savedChat.timestamp);
+                setMessages([
+                  {
+                    id: `user-${savedChat.id}`,
+                    type: 'user',
+                    text: savedChat.query,
+                    timestamp,
+                  },
+                  {
+                    id: `ai-${savedChat.id}`,
+                    type: 'ai',
+                    text: savedChat.response,
+                    timestamp,
+                    response: {
+                      text: savedChat.response,
+                      sources: savedChat.sources || [],
+                      confidence: savedChat.confidence,
+                    },
+                  },
+                ]);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to restore saved chat:', error);
+        }
       } catch (error: any) {
         // Don't log errors for permission issues - they're expected until rules are set up
         if (error?.code !== 'permission-denied') {
@@ -108,13 +226,6 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
 
     loadChatHistory();
   }, [user?.id, toast]);
-
-  const form = useForm<QueryForm>({
-    resolver: zodResolver(querySchema),
-    defaultValues: {
-      query: '',
-    },
-  });
 
   const onSubmit = async (data: QueryForm) => {
     const chatId = currentChatId || `chat-${Date.now()}`;
@@ -269,6 +380,17 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
         setCurrentChatId(null);
         setCurrentChatTitle(null);
         setMessages([]);
+        
+        // Clear saved state
+        if (user?.id) {
+          try {
+            localStorage.removeItem(`istock_current_chat_${user.id}`);
+            localStorage.removeItem(`istock_current_chat_title_${user.id}`);
+            localStorage.removeItem(`istock_current_messages_${user.id}`);
+          } catch (error) {
+            console.error('Failed to clear saved chat state:', error);
+          }
+        }
       }
       
       toast({
@@ -292,20 +414,42 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
     setCurrentChatId(item.id);
     setCurrentChatTitle(item.title);
     const timestamp = item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp);
-    setMessages([
+    const loadedMessages = [
       {
         id: `user-${item.id}`,
-        type: 'user',
+        type: 'user' as const,
         text: item.query,
         timestamp,
       },
       {
         id: `ai-${item.id}`,
-        type: 'ai',
+        type: 'ai' as const,
         text: item.response,
         timestamp,
+        response: {
+          text: item.response,
+          sources: item.sources || [],
+          confidence: item.confidence,
+        },
       },
-    ]);
+    ];
+    setMessages(loadedMessages);
+    
+    // Save to localStorage
+    if (user?.id) {
+      try {
+        localStorage.setItem(`istock_current_chat_${user.id}`, item.id);
+        localStorage.setItem(`istock_current_chat_title_${user.id}`, item.title);
+        const messagesToSave = loadedMessages.map((msg) => ({
+          ...msg,
+          timestamp: msg.timestamp.toISOString(),
+        }));
+        localStorage.setItem(`istock_current_messages_${user.id}`, JSON.stringify(messagesToSave));
+      } catch (error) {
+        console.error('Failed to save loaded chat state:', error);
+      }
+    }
+    
     setIsHistoryOpen(false);
     announce(`Loaded chat: ${item.title}`);
   };
@@ -328,11 +472,140 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
     });
   };
 
+  // Persist current chat state to localStorage
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    try {
+      if (currentChatId && currentChatTitle) {
+        localStorage.setItem(`istock_current_chat_${user.id}`, currentChatId);
+        localStorage.setItem(`istock_current_chat_title_${user.id}`, currentChatTitle);
+      } else {
+        // Clear saved state when starting new chat
+        localStorage.removeItem(`istock_current_chat_${user.id}`);
+        localStorage.removeItem(`istock_current_chat_title_${user.id}`);
+        localStorage.removeItem(`istock_current_messages_${user.id}`);
+      }
+    } catch (error) {
+      console.error('Failed to save current chat state:', error);
+    }
+  }, [currentChatId, currentChatTitle, user?.id]);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    if (!user?.id || !currentChatId || messages.length === 0) return;
+    
+    try {
+      // Only save if we have messages and a current chat
+      const messagesToSave = messages.map((msg) => ({
+        ...msg,
+        timestamp: msg.timestamp.toISOString(), // Convert Date to string for JSON
+      }));
+      localStorage.setItem(`istock_current_messages_${user.id}`, JSON.stringify(messagesToSave));
+    } catch (error) {
+      console.error('Failed to save messages:', error);
+    }
+  }, [messages, currentChatId, user?.id]);
+
   const startNewChat = () => {
     setCurrentChatId(null);
     setCurrentChatTitle(null);
     setMessages([]);
+    form.reset();
+    clearTranscript();
+    
+    // Clear saved state
+    if (user?.id) {
+      try {
+        localStorage.removeItem(`istock_current_chat_${user.id}`);
+        localStorage.removeItem(`istock_current_chat_title_${user.id}`);
+        localStorage.removeItem(`istock_current_messages_${user.id}`);
+      } catch (error) {
+        console.error('Failed to clear saved chat state:', error);
+      }
+    }
   };
+
+  // Handle redo (regenerate response)
+  const handleRedo = async (messageId: string) => {
+    // Find the user message that corresponds to this AI message
+    const aiMessageIndex = messages.findIndex((msg) => msg.id === messageId && msg.type === 'ai');
+    if (aiMessageIndex === -1) return;
+    
+    // Find the previous user message
+    const userMessageIndex = aiMessageIndex - 1;
+    if (userMessageIndex < 0 || messages[userMessageIndex].type !== 'user') return;
+    
+    const userMessage = messages[userMessageIndex];
+    
+    // Remove the AI message and regenerate
+    setMessages((prev) => prev.slice(0, aiMessageIndex));
+    
+    // Submit the query again
+    try {
+      const response = await askRag.mutateAsync({
+        query: userMessage.text,
+      });
+
+      const newAiMessage: Message = {
+        id: `ai-${Date.now()}`,
+        type: 'ai',
+        text: response.text,
+        timestamp: new Date(),
+        response: response,
+      };
+
+      setMessages((prev) => [...prev, newAiMessage]);
+      
+      // Update Firestore if this is a saved chat
+      if (user?.id && currentChatId) {
+        try {
+          await updateChat(user.id, currentChatId, {
+            response: response.text,
+            sources: response.sources,
+            confidence: response.confidence,
+          });
+        } catch (error) {
+          console.error('Failed to update chat:', error);
+        }
+      }
+      
+      announce(`Response regenerated`);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to regenerate response',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Handle feedback change
+  const handleFeedbackChange = (messageId: string, feedback: 'like' | 'dislike' | null) => {
+    // Update the message's feedback state in the messages array
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId ? { ...msg, feedback } : msg
+      )
+    );
+  };
+
+  // Handle voice input toggle
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      clearTranscript();
+      startListening();
+    }
+  };
+
+  // Update form when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      form.setValue('query', transcript, { shouldValidate: true });
+    }
+  }, [transcript, form]);
 
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
@@ -463,15 +736,17 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
           </div>
         </div>
 
-        {/* Chat Messages Area */}
-        <div className="flex-1 overflow-y-auto chat-scrollbar">
-          <div className="py-4">
-            <ChatInterface
-              messages={messages}
-              isLoading={askRag.isPending}
-            />
-          </div>
-        </div>
+              {/* Chat Messages Area */}
+              <div className="flex-1 overflow-y-auto chat-scrollbar">
+                <div className="py-4">
+                  <ChatInterface
+                    messages={messages}
+                    isLoading={askRag.isPending}
+                    onRedo={handleRedo}
+                    onFeedbackChange={handleFeedbackChange}
+                  />
+                </div>
+              </div>
 
         {/* Input Area */}
         <div className="sticky bottom-0 border-t border-border bg-white dark:bg-gray-950 py-4">
@@ -486,8 +761,8 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                   {...form.register('query')}
                   placeholder="Message iStock chatbot..."
                   rows={1}
-                  className="resize-none border rounded-2xl pr-12 py-3 px-4 min-h-[52px] max-h-[200px] focus:outline-none focus:ring-0 bg-background text-base leading-normal"
-                  disabled={askRag.isPending}
+                  className="resize-none border rounded-2xl pr-24 py-3 px-4 min-h-[52px] max-h-[200px] focus:outline-none focus:ring-0 bg-background text-base leading-normal"
+                  disabled={askRag.isPending || isListening}
                   aria-describedby="chat-description chat-error"
                   aria-label="Chat message input"
                   aria-busy={askRag.isPending}
@@ -496,26 +771,96 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                       e.preventDefault();
                       form.handleSubmit(onSubmit)();
                     }
+                    if (e.key === 'Escape' && isListening) {
+                      e.preventDefault();
+                      stopListening();
+                      clearTranscript();
+                      form.setValue('query', '');
+                    }
                   }}
                 />
-                <Button
-                  type="submit"
-                  disabled={askRag.isPending || !form.watch('query')?.trim()}
-                  size="icon"
-                  className="absolute bottom-2 right-2 h-8 w-8 rounded-lg bg-[#10a37f] hover:bg-[#0d8c6e] text-white disabled:opacity-50 disabled:bg-muted"
-                  aria-label={askRag.isPending ? 'Sending message...' : 'Send message'}
-                >
-                  {askRag.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                  {isListening ? (
+                    <>
+                      {/* Cancel Recording Button - Only shown when listening */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          stopListening();
+                          clearTranscript();
+                          form.setValue('query', '');
+                        }}
+                        disabled={askRag.isPending}
+                        className="h-8 px-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40 transition-all duration-200"
+                        aria-label="Cancel recording"
+                      >
+                        <Square className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                        <span className="text-xs font-medium">Cancel</span>
+                      </Button>
+                      {/* Stop Recording Button */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleVoiceToggle}
+                        disabled={askRag.isPending}
+                        className="h-8 w-8 rounded-lg bg-red-500 text-white hover:bg-red-600 animate-pulse transition-all duration-200"
+                        aria-label="Stop recording"
+                      >
+                        <Square className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </>
                   ) : (
-                    <Send className="h-4 w-4" aria-hidden="true" />
+                    <>
+                      {/* Voice Input Button - Only shown when not listening */}
+                      {isVoiceSupported && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleVoiceToggle}
+                          disabled={askRag.isPending}
+                          className="h-8 w-8 rounded-lg hover:bg-muted transition-all duration-200"
+                          aria-label="Start voice input"
+                        >
+                          <Mic className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      )}
+                      {/* Send Button */}
+                      <Button
+                        type="submit"
+                        disabled={askRag.isPending || !form.watch('query')?.trim()}
+                        size="icon"
+                        className="h-8 w-8 rounded-lg bg-[#10a37f] hover:bg-[#0d8c6e] text-white disabled:opacity-50 disabled:bg-muted disabled:cursor-not-allowed"
+                        aria-label={askRag.isPending ? 'Sending message...' : 'Send message'}
+                      >
+                        {askRag.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Send className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </>
                   )}
-                </Button>
+                </div>
               </div>
               {form.formState.errors.query && (
                 <p id="chat-error" className="text-sm text-destructive font-medium mt-2 px-4" role="alert">
                   {form.formState.errors.query.message}
                 </p>
+              )}
+              {isListening && (
+                <div className="mt-2 px-4">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1" role="status" aria-live="polite">
+                    <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse" aria-hidden="true" />
+                    <span>Listening... Speak now</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Click <span className="font-medium">Cancel</span> to discard, click <span className="font-medium">Stop</span> to finish, or press <span className="font-medium">Esc</span> to cancel
+                  </p>
+                </div>
               )}
             </form>
           </div>

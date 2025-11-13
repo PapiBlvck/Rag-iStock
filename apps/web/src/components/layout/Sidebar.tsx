@@ -46,14 +46,13 @@ export function Sidebar({ currentRoute, onRouteChange, onNewChat, onHistoryClick
         {isExpanded ? (
           <>
             <button
-              onClick={() => onRouteChange('chatbot')}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md px-1"
+              className="group flex items-center gap-2 rounded-md px-1 focus:outline-none transition-all duration-200 hover:scale-105 active:scale-95"
               aria-label="Go to home (Chatbot)"
             >
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:shadow-lg group-hover:shadow-primary/50 group-hover:scale-110">
                 <span className="text-white font-bold text-lg">i</span>
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent whitespace-nowrap">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent whitespace-nowrap transition-all duration-200 group-hover:opacity-90">
                 iStock
                 <span className="sr-only"> - Precision Livestock Management</span>
               </h1>
@@ -72,7 +71,7 @@ export function Sidebar({ currentRoute, onRouteChange, onNewChat, onHistoryClick
           <>
             <button
               onClick={() => onRouteChange('chatbot')}
-              className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center hover:opacity-80 transition-opacity"
+              className="group h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center focus:outline-none transition-all duration-200 hover:scale-110 hover:shadow-lg hover:shadow-primary/50 active:scale-95"
               aria-label="Go to home (Chatbot)"
             >
               <span className="text-white font-bold text-lg">i</span>

@@ -128,13 +128,13 @@ When answering questions about diseases or conditions:
 Context:
 ${combinedContext}
 
-Format your answer as a clear list with categories where appropriate. Include all relevant items from the context.`
+Format your answer as a clear list with categories where appropriate. Include ALL relevant items from the context. Do not truncate or shorten your answer - provide complete information.`
       : `Based on the following context from veterinary documents, answer this question: ${userQuery}
 
 Context:
 ${combinedContext}
 
-Provide a clear, well-organized answer with specific examples from the context.`;
+Provide a clear, well-organized, and COMPLETE answer with specific examples from the context. Do not truncate or shorten your answer - include all relevant information.`;
 
     // Use Google Gen AI SDK (recommended - replaces deprecated Vertex AI SDK)
     // Try multiple regions and models
@@ -173,7 +173,7 @@ Provide a clear, well-organized answer with specific examples from the context.`
                 model: modelName,
                 contents: fullPrompt,
                 config: {
-                  maxOutputTokens: 2000,
+                  maxOutputTokens: 8000,
                   temperature: 0.7,
                   topP: 0.95,
                 },
@@ -268,17 +268,17 @@ function formatContextsAsAnswer(query: string, contexts: string[]): string {
   // Extract meaningful sentences
   const sentences = cleaned.split(/[.!?]\s+/).filter(s => s.length > 30 && s.length < 500);
   
-  // Take first 15-20 sentences for a comprehensive answer
-  const answer = sentences.slice(0, 20).join('. ').trim();
+  // Use all sentences for a comprehensive answer (no truncation)
+  const answer = sentences.join('. ').trim();
   
   if (answer.length < 100) {
     // If still too short, use first context with better formatting
     const firstContext = contexts[0];
     const firstSentences = firstContext.split(/[.!?]\s+/).filter(s => s.length > 30);
-    return firstSentences.slice(0, 10).join('. ').trim() + (firstSentences.length > 10 ? '...' : '');
+    return firstSentences.join('. ').trim();
   }
 
-  return answer + (sentences.length > 20 ? '...' : '');
+  return answer;
 }
 
 /**

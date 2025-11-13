@@ -13,9 +13,11 @@ interface Message {
 interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
+  onRedo?: (messageId: string) => void;
+  onFeedbackChange?: (messageId: string, feedback: 'like' | 'dislike' | null) => void;
 }
 
-export function ChatInterface({ messages, isLoading }: ChatInterfaceProps) {
+export function ChatInterface({ messages, isLoading, onRedo, onFeedbackChange }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -47,7 +49,12 @@ export function ChatInterface({ messages, isLoading }: ChatInterfaceProps) {
         )}
 
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble 
+            key={message.id} 
+            message={message} 
+            onRedo={onRedo}
+            onFeedbackChange={onFeedbackChange}
+          />
         ))}
 
         {isLoading && (
