@@ -7,15 +7,11 @@ import { ChatInterface } from '@/components/chatbot/ChatInterface';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, History, Edit2, Trash2, X, Check, Loader2, Plus } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from '@/components/ui/sheet';
 import type { RagResponse } from '@istock/shared';
 import { formatDistanceToNow } from '@/lib/date-utils';
@@ -31,6 +27,8 @@ import {
   type ChatHistoryItem as FirestoreChatHistoryItem,
 } from '@/lib/firestore-services';
 import { useToast } from '@/hooks/use-toast';
+import { Sidebar } from '@/components/layout/Sidebar';
+import type { AppRoute } from '@/components/layout/AppLayout';
 
 interface Message {
   id: string;
@@ -56,7 +54,12 @@ const querySchema = z.object({
 
 type QueryForm = z.infer<typeof querySchema>;
 
-export function Chatbot() {
+interface ChatbotProps {
+  currentRoute?: AppRoute;
+  onRouteChange?: (route: AppRoute) => void;
+}
+
+export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
@@ -331,298 +334,331 @@ export function Chatbot() {
     setMessages([]);
   };
 
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebar-expanded');
+    if (stored !== null) {
+      setSidebarExpanded(stored === 'true');
+    }
+    
+    const handleSidebarToggle = (e: CustomEvent) => {
+      setSidebarExpanded(e.detail.expanded);
+    };
+    
+    window.addEventListener('sidebar-toggle', handleSidebarToggle as EventListener);
+    return () => {
+      window.removeEventListener('sidebar-toggle', handleSidebarToggle as EventListener);
+    };
+  }, []);
+
+  const handleRouteChange = (route: AppRoute) => {
+    if (onRouteChange) {
+      onRouteChange(route);
+    }
+  };
+
   return (
-    <div className="h-full overflow-y-auto chat-scrollbar">
-      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            {currentChatTitle ? (
-              <>
-                {editingId === currentChatId ? (
-                  <div className="flex items-center gap-3">
-                    <label htmlFor="edit-chat-title" className="sr-only">
-                      Edit chat title
-                    </label>
-                    <Input
-                      id="edit-chat-title"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveRename();
-                        if (e.key === 'Escape') cancelRename();
-                      }}
-                      className="text-3xl font-bold border-primary"
-                      autoFocus
-                      aria-label="Chat title"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={saveRename}
-                      className="h-8 w-8"
-                      aria-label="Save chat title"
-                    >
-                      <Check className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={cancelRename}
-                      className="h-8 w-8"
-                      aria-label="Cancel editing chat title"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
+    <div className="flex h-full bg-white dark:bg-gray-950">
+      {/* Sidebar */}
+      <Sidebar
+        currentRoute={currentRoute}
+        onRouteChange={handleRouteChange}
+        onNewChat={startNewChat}
+        onHistoryClick={() => setIsHistoryOpen(true)}
+      />
+
+      {/* Main Content Area */}
+      <div 
+        className="flex-1 flex flex-col transition-all duration-300" 
+        style={{ marginLeft: sidebarExpanded ? '16rem' : '4rem' }}
+      >
+        {/* Top Bar with Chat Title */}
+        <div className="sticky top-0 z-40 border-b border-border bg-white dark:bg-gray-950">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex-1 min-w-0">
+                {currentChatTitle ? (
+                  <>
+                    {editingId === currentChatId ? (
+                      <div className="flex items-center gap-3">
+                        <label htmlFor="edit-chat-title" className="sr-only">
+                          Edit chat title
+                        </label>
+                        <Input
+                          id="edit-chat-title"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveRename();
+                            if (e.key === 'Escape') cancelRename();
+                          }}
+                          className="text-xl font-medium border-primary"
+                          autoFocus
+                          aria-label="Chat title"
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={saveRename}
+                          className="h-8 w-8"
+                          aria-label="Save chat title"
+                        >
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={cancelRename}
+                          className="h-8 w-8"
+                          aria-label="Cancel editing chat title"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <h1 className="text-xl font-medium text-foreground truncate">
+                          {currentChatTitle}
+                        </h1>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => startRename({ id: currentChatId!, title: currentChatTitle!, query: '', response: '', timestamp: new Date() })}
+                          className="h-7 w-7"
+                          aria-label={`Edit chat title: ${currentChatTitle}`}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deleteChat(currentChatId!)}
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete chat: ${currentChatTitle}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent truncate">
-                      {currentChatTitle}
-                    </h1>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => startRename({ id: currentChatId!, title: currentChatTitle!, query: '', response: '', timestamp: new Date() })}
-                      className="h-8 w-8"
-                      aria-label={`Edit chat title: ${currentChatTitle}`}
-                    >
-                      <Edit2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => deleteChat(currentChatId!)}
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      aria-label={`Delete chat: ${currentChatTitle}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
+                  <h1 className="text-xl font-medium text-foreground">
+                    Chat
+                  </h1>
                 )}
-                <p className="text-sm text-muted-foreground mt-2 font-medium" id="chat-description">
-                  Ask questions about livestock health, symptoms, or treatments
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                  Chat
-                </h1>
-                <p className="text-sm text-muted-foreground mt-2 font-medium" id="chat-description">
-                  Ask questions about livestock health, symptoms, or treatments
-                </p>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2 ml-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={startNewChat}
-              className="h-9 w-9"
-              aria-label="Start a new chat"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-              <SheetTrigger asChild>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={startNewChat}
                   className="h-9 w-9"
-                  aria-label="Open chat history"
-                  aria-expanded={isHistoryOpen}
-                  aria-controls="chat-history-sheet"
+                  aria-label="Start a new chat"
                 >
-                  <History className="h-4 w-4" aria-hidden="true" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
-              </SheetTrigger>
-              <SheetContent
-                side="left"
-                className="w-80 sm:w-96"
-                id="chat-history-sheet"
-                aria-label="Chat history"
-              >
-                <FocusTrap enabled={isHistoryOpen}>
-                  <SheetHeader>
-                    <SheetTitle>Chat History</SheetTitle>
-                    <SheetDescription>
-                      View and manage your previous chats
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div
-                    ref={historySheetRef}
-                    className="mt-6 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto"
-                    role="list"
-                    aria-label="Chat history list"
-                  >
-                    {chatHistory.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-8" role="status">
-                        No chat history yet
-                      </p>
-                    ) : (
-                      chatHistory.map((item, index) => (
-                        <Card
-                          key={item.id}
-                          ref={(el) => {
-                            historyItemsRef.current[index] = el;
-                          }}
-                          role="listitem"
-                          tabIndex={0}
-                          className={`cursor-pointer hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
-                            item.id === currentChatId ? 'border-primary' : ''
-                          }`}
-                          onClick={() => loadChat(item)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              loadChat(item);
-                            }
-                            handleHistoryKeyDown(e, index);
-                          }}
-                          aria-label={`Chat: ${item.title}`}
-                          aria-current={item.id === currentChatId ? 'true' : undefined}
-                        >
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between gap-2">
-                            {editingId === item.id ? (
-                              <div className="flex items-center gap-2 flex-1">
-                                <Input
-                                  value={editTitle}
-                                  onChange={(e) => setEditTitle(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') saveRename();
-                                    if (e.key === 'Escape') cancelRename();
-                                  }}
-                                  className="text-sm"
-                                  autoFocus
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    saveRename();
-                                  }}
-                                  className="h-7 w-7"
-                                >
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    cancelRename();
-                                  }}
-                                  className="h-7 w-7"
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="flex-1 min-w-0">
-                                  <CardTitle className="text-sm font-semibold line-clamp-2">
-                                    {item.title}
-                                  </CardTitle>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {formatDistanceToNow(new Date(item.timestamp))}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startRename(item);
-                                    }}
-                                    className="h-7 w-7"
-                                    aria-label={`Rename chat: ${item.title}`}
-                                  >
-                                    <Edit2 className="h-3 w-3" aria-hidden="true" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteChat(item.id);
-                                    }}
-                                    className="h-7 w-7 text-destructive hover:text-destructive"
-                                    aria-label={`Delete chat: ${item.title}`}
-                                  >
-                                    <Trash2 className="h-3 w-3" aria-hidden="true" />
-                                  </Button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </CardHeader>
-                      </Card>
-                    ))
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Messages Area */}
+        <div className="flex-1 overflow-y-auto chat-scrollbar">
+          <div className="py-4">
+            <ChatInterface
+              messages={messages}
+              isLoading={askRag.isPending}
+            />
+          </div>
+        </div>
+
+        {/* Input Area */}
+        <div className="sticky bottom-0 border-t border-border bg-white dark:bg-gray-950 py-4">
+          <div className="max-w-4xl mx-auto px-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} aria-label="Chat input form">
+              <div className="relative">
+                <label htmlFor="chat-input" className="sr-only">
+                  Enter your question about livestock health, symptoms, or treatments
+                </label>
+                <Textarea
+                  id="chat-input"
+                  {...form.register('query')}
+                  placeholder="Message iStock chatbot..."
+                  rows={1}
+                  className="resize-none border rounded-2xl pr-12 py-3 px-4 min-h-[52px] max-h-[200px] focus:outline-none focus:ring-0 bg-background text-base leading-normal"
+                  disabled={askRag.isPending}
+                  aria-describedby="chat-description chat-error"
+                  aria-label="Chat message input"
+                  aria-busy={askRag.isPending}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      form.handleSubmit(onSubmit)();
+                    }
+                  }}
+                />
+                <Button
+                  type="submit"
+                  disabled={askRag.isPending || !form.watch('query')?.trim()}
+                  size="icon"
+                  className="absolute bottom-2 right-2 h-8 w-8 rounded-lg bg-[#10a37f] hover:bg-[#0d8c6e] text-white disabled:opacity-50 disabled:bg-muted"
+                  aria-label={askRag.isPending ? 'Sending message...' : 'Send message'}
+                >
+                  {askRag.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="h-4 w-4" aria-hidden="true" />
                   )}
-                  </div>
-                </FocusTrap>
-              </SheetContent>
-            </Sheet>
+                </Button>
+              </div>
+              {form.formState.errors.query && (
+                <p id="chat-error" className="text-sm text-destructive font-medium mt-2 px-4" role="alert">
+                  {form.formState.errors.query.message}
+                </p>
+              )}
+            </form>
           </div>
         </div>
       </div>
 
-      <div className="p-4 md:p-6 max-w-7xl mx-auto pb-32">
-        <ChatInterface
-          messages={messages}
-          isLoading={askRag.isPending}
-        />
-      </div>
+      {/* Chat History Sheet */}
+      <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <SheetContent
+          side="left"
+          className="w-80 sm:w-96 p-0"
+          id="chat-history-sheet"
+          aria-label="Chat history"
+        >
+          <FocusTrap enabled={isHistoryOpen}>
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="px-6 py-4 border-b">
+                <SheetTitle className="text-lg font-medium">Chat History</SheetTitle>
+              </div>
 
-      <div className="max-w-3xl mx-auto px-4 sticky bottom-0 py-3">
-        <form onSubmit={form.handleSubmit(onSubmit)} aria-label="Chat input form">
-          <div className="relative">
-            <label htmlFor="chat-input" className="sr-only">
-              Enter your question about livestock health, symptoms, or treatments
-            </label>
-            <Textarea
-              id="chat-input"
-              {...form.register('query')}
-              placeholder="Message iStock chatbot..."
-              rows={1}
-              className="resize-none border rounded-2xl pr-12 py-3 px-4 min-h-[52px] max-h-[200px] focus:outline-none focus:ring-0 bg-background text-base leading-normal"
-              disabled={askRag.isPending}
-              aria-describedby="chat-description chat-error"
-              aria-label="Chat message input"
-              aria-busy={askRag.isPending}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  form.handleSubmit(onSubmit)();
-                }
-              }}
-            />
-            <Button
-              type="submit"
-              disabled={askRag.isPending || !form.watch('query')?.trim()}
-              size="icon"
-              className="absolute bottom-2 right-2 h-8 w-8 rounded-lg bg-[#10a37f] hover:bg-[#0d8c6e] text-white disabled:opacity-50 disabled:bg-muted"
-              aria-label={askRag.isPending ? 'Sending message...' : 'Send message'}
-            >
-              {askRag.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Send className="h-4 w-4" aria-hidden="true" />
-              )}
-            </Button>
-          </div>
-          {form.formState.errors.query && (
-            <p id="chat-error" className="text-sm text-destructive font-medium mt-2 px-4" role="alert">
-              {form.formState.errors.query.message}
-            </p>
-          )}
-        </form>
-      </div>
+              {/* Chat List */}
+              <div
+                ref={historySheetRef}
+                className="flex-1 overflow-y-auto px-2 py-2"
+                role="list"
+                aria-label="Chat history list"
+              >
+                {chatHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <p className="text-sm text-muted-foreground text-center" role="status">
+                      No chat history yet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {chatHistory.map((item, index) => (
+                      <div
+                        key={item.id}
+                        ref={(el) => {
+                          historyItemsRef.current[index] = el;
+                        }}
+                        role="listitem"
+                        tabIndex={0}
+                        className={`group relative rounded-lg px-3 py-2.5 cursor-pointer transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          item.id === currentChatId ? 'bg-accent' : ''
+                        }`}
+                        onClick={() => loadChat(item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            loadChat(item);
+                          }
+                          handleHistoryKeyDown(e, index);
+                        }}
+                        aria-label={`Chat: ${item.title}`}
+                        aria-current={item.id === currentChatId ? 'true' : undefined}
+                      >
+                        {editingId === item.id ? (
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveRename();
+                                if (e.key === 'Escape') cancelRename();
+                              }}
+                              className="text-sm h-8"
+                              autoFocus
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveRename();
+                              }}
+                              className="h-7 w-7"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelRename();
+                              }}
+                              className="h-7 w-7"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex-1 min-w-0 pr-8">
+                              <p className="text-sm font-medium text-foreground line-clamp-2">
+                                {item.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {formatDistanceToNow(new Date(item.timestamp))}
+                              </p>
+                            </div>
+                            <div 
+                              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startRename(item);
+                                }}
+                                className="h-7 w-7"
+                                aria-label={`Rename chat: ${item.title}`}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteChat(item.id);
+                                }}
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                aria-label={`Delete chat: ${item.title}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </FocusTrap>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

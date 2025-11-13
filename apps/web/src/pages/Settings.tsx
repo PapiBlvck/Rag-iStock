@@ -21,8 +21,6 @@ import { updateProfile } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   getChatHistory,
-  getFeedOptimizations,
-  getIngredients,
   deleteDocument,
 } from '@/lib/firestore-services';
 
@@ -44,18 +42,12 @@ export function Settings() {
     if (!user?.id) return;
 
     try {
-      const [chats, feeds, ingredients] = await Promise.all([
-        getChatHistory(user.id),
-        getFeedOptimizations(user.id),
-        getIngredients(user.id),
-      ]);
+      const chats = await getChatHistory(user.id);
 
       const data = {
         exportDate: new Date().toISOString(),
         user: user,
         chats,
-        feeds,
-        ingredients,
       };
 
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -110,59 +102,6 @@ export function Settings() {
     }
   };
 
-  const clearFeedHistory = async () => {
-    if (!user?.id || !confirm('Are you sure you want to clear all feed optimization history? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const feeds = await getFeedOptimizations(user.id);
-      await Promise.all(feeds.map((feed) => deleteDocument('feedOptimizations', feed.id)));
-      
-      toast({
-        title: 'Success',
-        description: 'Feed history cleared successfully',
-      });
-      window.location.reload();
-    } catch (error: any) {
-      console.error('Failed to clear feed history:', error);
-      // Only show toast for non-permission errors
-      if (error?.code !== 'permission-denied') {
-        toast({
-          title: 'Error',
-          description: 'Failed to clear feed history',
-          variant: 'destructive',
-        });
-      }
-    }
-  };
-
-  const clearIngredients = async () => {
-    if (!user?.id || !confirm('Are you sure you want to clear all saved ingredients? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const ingredients = await getIngredients(user.id);
-      await Promise.all(ingredients.map((ing) => deleteDocument('ingredients', ing.id)));
-      
-      toast({
-        title: 'Success',
-        description: 'Ingredients cleared successfully',
-      });
-      window.location.reload();
-    } catch (error: any) {
-      console.error('Failed to clear ingredients:', error);
-      // Only show toast for non-permission errors
-      if (error?.code !== 'permission-denied') {
-        toast({
-          title: 'Error',
-          description: 'Failed to clear ingredients',
-          variant: 'destructive',
-        });
-      }
-    }
-  };
 
   const handleProfileUpdate = async () => {
     if (!user || !auth.currentUser) {
@@ -402,7 +341,7 @@ export function Settings() {
 
               <Separator />
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
                 <div>
                   <Label className="font-semibold text-destructive">Clear Chat History</Label>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -410,32 +349,6 @@ export function Settings() {
                   </p>
                 </div>
                 <Button onClick={clearChatHistory} variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="font-semibold text-destructive">Clear Feed History</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Delete all feed optimization records
-                  </p>
-                </div>
-                <Button onClick={clearFeedHistory} variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="font-semibold text-destructive">Clear Ingredients</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Delete all saved ingredients
-                  </p>
-                </div>
-                <Button onClick={clearIngredients} variant="destructive" size="sm">
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear
                 </Button>
