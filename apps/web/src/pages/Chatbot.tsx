@@ -7,15 +7,11 @@ import { ChatInterface } from '@/components/chatbot/ChatInterface';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, History, Edit2, Trash2, X, Check, Loader2, Plus } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from '@/components/ui/sheet';
 import type { RagResponse } from '@istock/shared';
 import { formatDistanceToNow } from '@/lib/date-utils';
@@ -530,54 +526,56 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
       <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <SheetContent
           side="left"
-          className="w-80 sm:w-96"
+          className="w-80 sm:w-96 p-0"
           id="chat-history-sheet"
           aria-label="Chat history"
         >
           <FocusTrap enabled={isHistoryOpen}>
-            <SheetHeader>
-              <SheetTitle>Chat History</SheetTitle>
-              <SheetDescription>
-                View and manage your previous chats
-              </SheetDescription>
-            </SheetHeader>
-            <div
-              ref={historySheetRef}
-              className="mt-6 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto"
-              role="list"
-              aria-label="Chat history list"
-            >
-              {chatHistory.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8" role="status">
-                  No chat history yet
-                </p>
-              ) : (
-                chatHistory.map((item, index) => (
-                  <Card
-                    key={item.id}
-                    ref={(el) => {
-                      historyItemsRef.current[index] = el;
-                    }}
-                    role="listitem"
-                    tabIndex={0}
-                    className={`cursor-pointer hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
-                      item.id === currentChatId ? 'border-primary' : ''
-                    }`}
-                    onClick={() => loadChat(item)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        loadChat(item);
-                      }
-                      handleHistoryKeyDown(e, index);
-                    }}
-                    aria-label={`Chat: ${item.title}`}
-                    aria-current={item.id === currentChatId ? 'true' : undefined}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="px-6 py-4 border-b">
+                <SheetTitle className="text-lg font-medium">Chat History</SheetTitle>
+              </div>
+
+              {/* Chat List */}
+              <div
+                ref={historySheetRef}
+                className="flex-1 overflow-y-auto px-2 py-2"
+                role="list"
+                aria-label="Chat history list"
+              >
+                {chatHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <p className="text-sm text-muted-foreground text-center" role="status">
+                      No chat history yet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {chatHistory.map((item, index) => (
+                      <div
+                        key={item.id}
+                        ref={(el) => {
+                          historyItemsRef.current[index] = el;
+                        }}
+                        role="listitem"
+                        tabIndex={0}
+                        className={`group relative rounded-lg px-3 py-2.5 cursor-pointer transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          item.id === currentChatId ? 'bg-accent' : ''
+                        }`}
+                        onClick={() => loadChat(item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            loadChat(item);
+                          }
+                          handleHistoryKeyDown(e, index);
+                        }}
+                        aria-label={`Chat: ${item.title}`}
+                        aria-current={item.id === currentChatId ? 'true' : undefined}
+                      >
                         {editingId === item.id ? (
-                          <div className="flex items-center gap-2 flex-1">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                               value={editTitle}
                               onChange={(e) => setEditTitle(e.target.value)}
@@ -585,9 +583,8 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                                 if (e.key === 'Enter') saveRename();
                                 if (e.key === 'Escape') cancelRename();
                               }}
-                              className="text-sm"
+                              className="text-sm h-8"
                               autoFocus
-                              onClick={(e) => e.stopPropagation()}
                             />
                             <Button
                               size="icon"
@@ -598,7 +595,7 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                               }}
                               className="h-7 w-7"
                             >
-                              <Check className="h-3 w-3" />
+                              <Check className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               size="icon"
@@ -609,20 +606,23 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                               }}
                               className="h-7 w-7"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         ) : (
                           <>
-                            <div className="flex-1 min-w-0">
-                              <CardTitle className="text-sm font-semibold line-clamp-2">
+                            <div className="flex-1 min-w-0 pr-8">
+                              <p className="text-sm font-medium text-foreground line-clamp-2">
                                 {item.title}
-                              </CardTitle>
-                              <p className="text-xs text-muted-foreground mt-1">
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {formatDistanceToNow(new Date(item.timestamp))}
                               </p>
                             </div>
-                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <div 
+                              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -633,7 +633,7 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                                 className="h-7 w-7"
                                 aria-label={`Rename chat: ${item.title}`}
                               >
-                                <Edit2 className="h-3 w-3" aria-hidden="true" />
+                                <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
                               </Button>
                               <Button
                                 size="icon"
@@ -642,19 +642,19 @@ export function Chatbot({ currentRoute = 'chatbot', onRouteChange }: ChatbotProp
                                   e.stopPropagation();
                                   deleteChat(item.id);
                                 }}
-                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                 aria-label={`Delete chat: ${item.title}`}
                               >
-                                <Trash2 className="h-3 w-3" aria-hidden="true" />
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                               </Button>
                             </div>
                           </>
                         )}
                       </div>
-                    </CardHeader>
-                  </Card>
-                ))
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </FocusTrap>
         </SheetContent>
