@@ -20,7 +20,7 @@ export function AppLayout({
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen bg-transparent">
       <SkipLinks />
       
       {/* Minimal Top Header */}
@@ -95,7 +95,7 @@ export function AppLayout({
       {/* Main Content */}
       <main
         id="main-content"
-        className="flex-1 overflow-auto pt-16 bg-gradient-to-br from-background via-background to-primary/5 dark:from-background dark:via-background/99 dark:to-primary/15 chat-scrollbar"
+        className="flex-1 overflow-auto pt-16 bg-transparent chat-scrollbar"
         role="main"
         aria-label="Main content"
       >

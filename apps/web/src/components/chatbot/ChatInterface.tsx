@@ -38,8 +38,8 @@ export function ChatInterface({ messages, isLoading }: ChatInterfaceProps) {
         {messages.length === 0 && (
           <div className="flex items-center justify-center min-h-[60vh] text-center px-4 py-16">
             <div className="space-y-3 max-w-2xl">
-              <h2 className="text-4xl font-semibold text-foreground">How can I help you today?</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-4xl font-semibold text-foreground drop-shadow-lg">How can I help you today?</h2>
+              <p className="text-sm text-muted-foreground drop-shadow-md">
                 Start a conversation by typing a question about livestock health, symptoms, or treatments
               </p>
             </div>
@@ -59,10 +59,10 @@ export function ChatInterface({ messages, isLoading }: ChatInterfaceProps) {
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="bg-muted/50 dark:bg-muted/30 border border-border/50 rounded-2xl px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-border/50 rounded-2xl px-4 py-3 shadow-lg">
+                  <div className="flex items-center gap-2 text-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span className="text-sm" aria-busy="true">Thinking...</span>
+                    <span className="text-sm font-medium" aria-busy="true">Thinking...</span>
                   </div>
                 </div>
               </div>

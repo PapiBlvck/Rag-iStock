@@ -332,8 +332,33 @@ export function Chatbot() {
   };
 
   return (
-    <div className="h-full overflow-y-auto chat-scrollbar">
-      <div className="p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
+    <div className="relative h-full overflow-y-auto chat-scrollbar" style={{ zIndex: 1 }}>
+      {/* Background Image - Blended */}
+      <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+        <div className="absolute inset-0 bg-slate-900">
+          <img
+            src="/AdobeStock_86957210_Preview.jpeg"
+            alt=""
+            className="w-full h-full object-cover"
+            style={{
+              opacity: 0.6,
+              filter: 'brightness(0.5) contrast(1.1) saturate(1.0)',
+            }}
+            onError={(e) => {
+              console.error('Failed to load background image:', e);
+              // Try alternative image path
+              const target = e.target as HTMLImageElement;
+              target.src = '/AdobeStock_624341140_Preview.jpeg';
+            }}
+            onLoad={() => console.log('Background image loaded successfully')}
+            aria-hidden="true"
+          />
+        </div>
+        {/* Dark Overlay for Better Blend */}
+        <div className="absolute inset-0 bg-slate-900/50" />
+      </div>
+
+      <div className="relative p-6 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md backdrop-saturate-150 shadow-sm sticky top-0 z-50" style={{ backdropFilter: 'blur(16px) saturate(180%)' }}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex-1 min-w-0">
             {currentChatTitle ? (

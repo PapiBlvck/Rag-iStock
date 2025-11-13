@@ -27,9 +27,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       >
         <div className="flex gap-4 max-w-3xl mx-auto justify-end">
           <div className="flex-1 min-w-0 flex justify-end">
-            <div className="bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 rounded-2xl px-4 py-3 shadow-sm max-w-[85%] md:max-w-[75%]">
+            <div className="bg-primary/90 dark:bg-primary/80 backdrop-blur-sm border border-primary/30 rounded-2xl px-4 py-3 shadow-lg max-w-[85%] md:max-w-[75%]">
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <p className="text-foreground whitespace-pre-wrap leading-relaxed m-0">
+                <p className="text-primary-foreground whitespace-pre-wrap leading-relaxed m-0 font-medium">
                   {message.text}
                 </p>
               </div>
@@ -68,9 +68,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="bg-muted/50 dark:bg-muted/30 border border-border/50 rounded-2xl px-4 py-3 shadow-sm">
+          <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-border/50 rounded-2xl px-4 py-3 shadow-lg">
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="text-foreground whitespace-pre-wrap leading-relaxed mb-4 m-0">
+              <p className="text-foreground whitespace-pre-wrap leading-relaxed mb-4 m-0 font-medium">
                 {message.text}
               </p>
 
