@@ -16,7 +16,7 @@
       }
     ],
     "predeploy": [
-      "npm --prefix apps/web run build"
+      "pnpm --filter web build"
     ]
   },
   "functions": [

@@ -6,26 +6,41 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    User Interface                       │
 │              (React + TypeScript SPA)                   │
-└──────────────────┬──────────────────────────────────────┘
-                   │ HTTP/WebSocket
-┌──────────────────▼──────────────────────────────────────┐
-│                  Frontend App (Vite)                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │ Pages    │  │Components│  │ Contexts │             │
-│  └──────────┘  └──────────┘  └──────────┘             │
-│  ┌──────────┐  ┌──────────┐                            │
-│  │  Hooks   │  │  Utils   │                            │
-│  └──────────┘  └──────────┘                            │
-└──────────────────┬──────────────────────────────────────┘
-                   │ tRPC
-┌──────────────────▼──────────────────────────────────────┐
-│            tRPC Router (Cloud Functions)                │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │ RAG      │  │ Feed Opt │  │ Health   │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
 └──────────────────┬──────────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────────┐
+│              Domain Services Layer                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │ Health   │  │Nutrition │  │  User    │             │
+│  │ Service  │  │ Service  │  │ Service  │             │
+│  └────┬─────┘  └────┬──────┘  └────┬─────┘             │
+│       │             │              │                    │
+│       └─────────────┴──────────────┘                    │
+│                   │                                      │
+│  ┌────────────────▼────────────────┐                   │
+│  │    Repository Interfaces        │                   │
+│  └────────────────┬─────────────────┘                   │
+└───────────────────┼──────────────────────────────────────┘
+                    │
+┌───────────────────▼──────────────────────────────────────┐
+│         Repository Implementations                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │Firestore │  │Firestore │  │Firestore │             │
+│  │Repos     │  │Repos     │  │Repos     │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+└───────────────────┬──────────────────────────────────────┘
+                    │
+┌───────────────────▼──────────────────────────────────────┐
+│            tRPC Router (Cloud Functions)                  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │ RAG      │  │ Feed Opt │  │ Health   │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+└───────────────────┬──────────────────────────────────────┘
+                    │
+┌───────────────────▼──────────────────────────────────────┐
 │              External Services                          │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │ Firestore│  │  Vector  │  │   AI/LLM │             │
@@ -39,6 +54,30 @@
 │  │Schemas   │  │          │  │          │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
 └─────────────────────────────────────────────────────────┘
+```
+
+## Domain-Driven Design Structure
+
+The application follows Domain-Driven Design (DDD) principles with clear domain boundaries:
+
+```
+apps/web/src/domains/
+├── health/              # Health consultation domain
+│   ├── entities/        # Domain entities (ChatHistory, MessageFeedback)
+│   ├── repositories/    # Repository interfaces and implementations
+│   │   ├── interfaces/
+│   │   └── implementations/
+│   └── services/        # Business logic services
+│       ├── interfaces/
+│       └── implementations/
+├── nutrition/           # Feed optimization domain
+│   ├── entities/        # Domain entities (Ingredient, FeedOptimization)
+│   ├── repositories/
+│   └── services/
+└── user/                # User management domain
+    ├── entities/        # Domain entities (UserProfile)
+    ├── repositories/
+    └── services/
 ```
 
 ## Component Hierarchy
@@ -70,6 +109,29 @@ App
 └── QueryClientProvider
 ```
 
+## Architecture Layers
+
+### Presentation Layer
+- **Components**: React components for UI rendering
+- **Pages**: Page-level components that compose features
+- **Hooks**: Custom React hooks for component logic
+- **Contexts**: Global state management (Auth, Theme, Notifications)
+
+### Domain Layer
+- **Entities**: Domain models representing business concepts
+- **Services**: Business logic and orchestration
+- **Repository Interfaces**: Contracts for data access
+
+### Infrastructure Layer
+- **Repository Implementations**: Firestore-specific data access
+- **External Services**: tRPC, RAG API, Firebase
+- **Utilities**: Helper functions and utilities
+
+### Dependency Injection
+- Services depend on repository interfaces, not implementations
+- Easy to swap implementations for testing
+- Clear dependency boundaries
+
 ## Data Flow
 
 ### Authentication Flow
@@ -79,13 +141,21 @@ App
 4. AppLayout shows authenticated UI
 5. Protected routes rendered
 
-### Chat Flow
-1. User types message
-2. React Hook Form validates with Zod
-3. tRPC mutation sent via TanStack Query
-4. Response cached and displayed
-5. Chat history saved to localStorage
-6. Screen reader announcement for new messages
+### Chat Flow (with Domain Architecture)
+1. User types message in component
+2. Component calls HealthService.askQuestion()
+3. HealthService uses IChatRepository interface
+4. FirestoreChatRepository implements data access
+5. Response returned through service layer
+6. Component displays result
+7. Chat saved via HealthService.saveChat()
+
+### Feed Optimization Flow
+1. User selects ingredients and animal type
+2. Component calls NutritionService.optimizeFeed()
+3. Service uses feed optimizer client
+4. Result saved via NutritionService.saveFeedOptimization()
+5. Uses IFeedOptimizationRepository for persistence
 
 ### State Management Flow
 
@@ -157,6 +227,25 @@ pnpm build  # TypeScript check + Vite build
 5. **Image Optimization**: Future: next/image or similar
 6. **Bundle Analysis**: Vite build reports bundle size
 
+## Error Handling
+
+The application uses a structured error handling approach:
+
+- **Domain Errors**: Custom error classes (NotFoundError, ValidationError, etc.)
+- **Error Propagation**: Errors flow from repositories → services → components
+- **User-Friendly Messages**: Errors are transformed to user-friendly messages at the UI layer
+- **Error Boundaries**: React Error Boundaries catch component-level errors
+
+See [ADR-0009: Error Handling Strategy](./adr/0009-error-handling-strategy.md) for details.
+
+## Dependency Management
+
+- **Dependency Injection Container**: Simple DI container for service registration
+- **Interface-Based Design**: Services depend on interfaces, not concrete implementations
+- **Testability**: Easy to inject mocks for testing
+
+See [ADR-0010: Dependency Injection Pattern](./adr/0010-dependency-injection.md) for details.
+
 ## Future Enhancements
 
 1. **Server-Side Rendering**: Consider Next.js if needed
@@ -165,4 +254,6 @@ pnpm build  # TypeScript check + Vite build
 4. **Storybook**: Component documentation and testing
 5. **Monitoring**: Add error tracking (Sentry)
 6. **Analytics**: User behavior tracking
+7. **Caching Layer**: Add caching for frequently accessed data
+8. **Event Sourcing**: Consider event sourcing for audit trails
 
